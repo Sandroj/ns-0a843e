@@ -1,0 +1,23 @@
+// App-shell cachen zodat de app ook zonder internet opent (data heeft wel verbinding nodig).
+// ponytail: network-first, val terug op cache. Geen offline-schrijfwachtrij (zie 'allebei'-optie).
+const CACHE = "ns2026-v1";
+const SHELL = ["./", "index.html", "styles.css", "config.js", "data.js", "storage.js", "app.js", "manifest.webmanifest", "icon.svg"];
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+});
+self.addEventListener("activate", (e) => {
+  e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+});
+self.addEventListener("fetch", (e) => {
+  const url = new URL(e.request.url);
+  // Supabase/weer/kaarttegels nooit uit cache serveren.
+  if (url.origin !== location.origin) return;
+  e.respondWith(
+    fetch(e.request).then((r) => {
+      const copy = r.clone();
+      caches.open(CACHE).then((c) => c.put(e.request, copy));
+      return r;
+    }).catch(() => caches.match(e.request).then((m) => m || caches.match("index.html")))
+  );
+});
