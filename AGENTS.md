@@ -43,20 +43,40 @@ waarheid; `HANDOFF.md` is het kompas.**
      los hiervan en hoef je niet aan te passen. -->
 
 ## Wat is dit
-Eén alinea: wat het project is, wie het gebruikt, live of prototype.
+Mobiel-first web-app voor Max' gezinsvakantie Noord-Spanje (5–28 aug 2026):
+dashboard, planning per dag, verblijven, activiteiten, kaart en checklist.
+Werkende v1. Data + sync via Supabase; te installeren als PWA op de telefoon.
 
 ## Stack & structuur
-- Taal / framework:
-- Hoe draai je het lokaal:
-- Belangrijke mappen:
+- **Taal / framework:** vanilla HTML/CSS/JS, geen build-stap. Leaflet + supabase-js
+  via CDN, weer via Open-Meteo (geen API-sleutels behalve Supabase).
+- **Hoe draai je het lokaal:** `python3 -m http.server 8777` in de projectmap
+  (moet **buiten de sandbox** — anders `PermissionError` op socket.bind), dan
+  http://localhost:8777.
+- **Belangrijke bestanden:** `app.js` (alle views + logica), `data.js` (startdata,
+  alleen bij eerste load), `storage.js` (Supabase laden/opslaan/realtime),
+  `config.js` (Supabase-sleutels), `schema.sql` (DB-tabel). Zie `README.md`.
+- **Data:** één tabel `trip_state`, één rij per reis (`TRIP_ID`), hele reis als
+  JSONB. Supabase-project staat in **EU/Frankfurt**.
 
 ## Zo verifieer je een wijziging
-De echte check voor dit project (draai dit voordat je "klaar" zegt):
-- Bijv. `npm test`, `npm run build`, of een specifiek commando. Vul in.
+Geen tests/build. Start de server (buiten sandbox) → open localhost:8777 → geen
+console-fouten, en dashboard/planning/kaart laden. Supabase-verbinding checken:
+in de browserconsole `fetch(CONFIG.SUPABASE_URL+'/rest/v1/trip_state?select=id',
+{headers:{apikey:CONFIG.SUPABASE_ANON_KEY}})` moet status 200 geven.
 
 ## Valkuilen (uit echte sessies)
-- Leg hier vast wat misging, zodat de volgende AI dezelfde fout niet maakt.
+- **Lokale server bindt niet in de sandbox** — draai `python3 -m http.server`
+  buiten de sandbox.
+- **Supabase-URL zonder pad**: alleen `https://<ref>.supabase.co`, géén
+  `/rest/v1/` erachter, anders faalt supabase-js.
+- `config.js` bevat de anon-key (bewust publiek, hoort in een client-app). De
+  beveiliging is link-gebaseerd (RLS = open access). **Nooit** de `service_role`-
+  key of het DB-wachtwoord in de app/repo zetten.
+- Sync = hele blob, last-write-wins (prima voor één gezin; zie README).
 
 ## Werkafspraken
-- Taal van communicatie:
-- Wat de gebruiker zelf doet / niet aangeraakt wil hebben:
+- **Taal:** Nederlands.
+- Max koppelt zelf accounts/hosts (Supabase, Netlify). Verwijder geen bestanden
+  zonder overleg. Startdata in `data.js` is Max' echte planning — pas 'm alleen
+  bewust aan.
