@@ -22,6 +22,23 @@ const STATUS = {
 const PRIORITY = { must: "Must-see", nice: "Nice-to-have", idee: "Idee" };
 const STAY_TYPES = ["camping", "appartement", "hotel", "onderweg"];
 
+// Echte afstand + rijtijd (Google Maps) voor specifieke dagen; overschrijft de grove
+// hemelsbrede schatting. Sommige dagen zijn meerdere ritten (sightseeing onderweg).
+// ponytail: gekoppeld aan datum — deze reis ligt vast; verschuift een datum, pas dit mee aan.
+const ROUTE_LEGS = {
+  "2026-08-13": [
+    { label: "Camping La Paz → Gijón (sightseeing)", km: 80, min: 60 },
+    { label: "Gijón → Oviedo", km: 30, min: 30 },
+  ],
+  "2026-08-16": [
+    { label: "Oviedo → Covadonga — binnendoor via Parque de Redes", km: 129, min: 156 },
+    { label: "Covadonga → overnachting richting Potes (Riaño e.o.)", km: 70, min: 90 },
+  ],
+  "2026-08-17": [
+    { label: "Riaño → Camping La Viorna (Potes), via Puerto de San Glorio", km: 55, min: 80 },
+  ],
+};
+
 // ---------- helpers ----------
 const $ = (s, r = document) => r.querySelector(s);
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -67,6 +84,104 @@ function travelKm(dateISO) {
   const a = stayById(days[idx - 1].stayId)?.coords, b = stayById(days[idx].stayId)?.coords;
   if (!a || !b) return null;
   return Math.round(haversine(a, b) * 1.3 / 10) * 10;
+}
+
+// Reis-info voor een dag: expliciete route-legs waar bekend, anders grove schatting.
+// Geeft {km, min, legs} of null als het geen reisdag is.
+function travelInfo(date) {
+  const legs = ROUTE_LEGS[date];
+  if (legs) return { km: legs.reduce((s, l) => s + l.km, 0), min: legs.reduce((s, l) => s + l.min, 0), legs };
+  const km = travelKm(date);
+  if (km == null) return null;
+  return { km, min: Math.round(km / 70 * 60), legs: null }; // ~70 km/u voor regionale wegen
+}
+// "2 u 36" / "1 u 05" / "45 min"
+function fmtDur(min) {
+  min = Math.round(min);
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h && m) return `${h} u ${String(m).padStart(2, "0")}`;
+  if (h) return `${h} u`;
+  return `${m} min`;
+}
+
+// ---------- Reisplanner heenreis ----------
+// Corridor NL → Asturië, cumulatieve wegkilometers vanaf het vertrekpunt (bij benadering).
+const HEEN_START = "Utrecht";
+const CORRIDOR = [
+  { name: "Antwerpen", km: 150 }, { name: "Rijsel", km: 300 }, { name: "Parijs", km: 520 },
+  { name: "Orléans", km: 640 }, { name: "Tours", km: 760 }, { name: "Poitiers", km: 870 },
+  { name: "Bordeaux", km: 1090 }, { name: "Bayonne", km: 1280 }, { name: "San Sebastián", km: 1340 },
+  { name: "Bilbao", km: 1440 }, { name: "Santander", km: 1540 }, { name: "Camping La Paz", km: 1650 },
+];
+// Rijmodel met twee jonge kinderen — knoppen om aan te draaien (ponytail: kalibreer op ervaring).
+const DRIVE = { speed: 78, meal: 0.75, dayStart: 9, dayEnd: 19, arriveBy: 15 };
+
+// Geef per dag terug hoe ver je komt bij een gegeven vertrektijd (uur, bv 12.5 = 12:30).
+function planHeenreis(departHour) {
+  const dest = CORRIDOR[CORRIDOR.length - 1].km;
+  const stops = CORRIDOR.slice(0, -1); // mogelijke overnachtsteden onderweg
+  const days = [];
+  let pos = 0, start = departHour, n = 1;
+  while (pos < dest - 1 && n <= 8) {
+    const avail = Math.max(0.5, DRIVE.dayEnd - start - DRIVE.meal);
+    const reach = pos + avail * DRIVE.speed;
+    if (reach >= dest) {
+      const driveH = (dest - pos) / DRIVE.speed;
+      const meal = driveH > 3 ? DRIVE.meal : driveH > 1.5 ? 0.5 : 0;
+      days.push({ n, from: pos, to: dest, city: "Camping La Paz", arrive: start + driveH + meal, driveH, final: true });
+      pos = dest;
+    } else {
+      const city = stops.filter((s) => s.km > pos + 20)
+        .reduce((a, b) => Math.abs(b.km - reach) < Math.abs(a.km - reach) ? b : a);
+      days.push({ n, from: pos, to: city.km, city: city.name, driveH: (city.km - pos) / DRIVE.speed });
+      pos = city.km;
+    }
+    start = DRIVE.dayStart; n++;
+  }
+  return days;
+}
+function renderHeenPlanner() {
+  const depart = localStorage.getItem("heenreis-depart") || "12:00";
+  return `<details class="card-d planner" id="heen-planner" ${openCards.has("heen-planner") ? "open" : ""}>
+    <summary>
+      <span class="sum-main">
+        <span class="sum-name">Reisplanner heenreis</span>
+        <span class="sum-sub">Vertrektijd invullen → schatting per dag tot La Paz</span>
+      </span>
+    </summary>
+    <div class="card-body">
+      <label class="lbl">Vertrek woensdag 5 aug uit ${esc(HEEN_START)}</label>
+      <input class="field" type="time" id="depart-time" value="${depart}">
+      <div id="heen-out">${heenOutHTML(depart)}</div>
+      <div class="muted" style="margin-top:12px">Schatting vanaf ${esc(HEEN_START)}, ~${DRIVE.speed} km/u incl. korte pauzes, warme maaltijd ~${Math.round(DRIVE.meal * 60)} min/dag, rijden tot ~${DRIVE.dayEnd}:00. Pas vertrekpunt of tempo naar wens aan.</div>
+    </div>
+  </details>`;
+}
+function heenOutHTML(departStr) {
+  const [h, m] = departStr.split(":").map(Number);
+  const days = planHeenreis((h || 0) + (m || 0) / 60);
+  const dateFor = (n) => { const d = new Date("2026-08-05T12:00:00"); d.setDate(d.getDate() + n - 1); return d; };
+  const wdLong = (d) => d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "short" });
+  const hm = (f) => { const H = Math.floor(f), M = Math.round((f - H) * 60); return `${H}:${String(M).padStart(2, "0")}`; };
+  const rows = days.map((d) => {
+    const dt = dateFor(d.n);
+    if (d.final) {
+      const late = d.arrive > DRIVE.arriveBy;
+      return `<div class="hp-day${late ? " hp-late" : ""}">
+        <div class="hp-date">${wdLong(dt)}</div>
+        <div class="hp-body"><b>Aankomst Camping La Paz</b> rond ${hm(d.arrive)} ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ ruim op tijd"}<br>
+        <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)}</span></div></div>`;
+    }
+    return `<div class="hp-day">
+      <div class="hp-date">${wdLong(dt)}</div>
+      <div class="hp-body">Overnachten rond <b>${esc(d.city)}</b><br>
+      <span class="muted">${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden · ${d.n === 1 ? `vertrek ${departStr}` : `vanaf ${DRIVE.dayStart}:00`}</span></div></div>`;
+  }).join("");
+  const arriveISO = dateFor(days[days.length - 1].n).toISOString().slice(0, 10);
+  let note = "";
+  if (arriveISO < "2026-08-08") note = `<div class="hp-note">Je komt volgens deze schatting vóór 8 aug aan. La Paz is geboekt vanaf za 8 aug — je hebt marge om rustiger te rijden of onderweg een extra nacht te pakken.</div>`;
+  else if (arriveISO > "2026-08-08") note = `<div class="hp-note hp-note-warn">Let op: je komt ná 8 aug aan, terwijl La Paz vanaf 8 aug geboekt is. Vertrek eerder of rijd de eerste dagen langer door.</div>`;
+  return rows + note;
 }
 
 // Groepeer opeenvolgende dagen per verblijf (voor de reis-tijdlijn).
@@ -142,6 +257,8 @@ function renderDashboard() {
     <div class="hero-big">${big}</div>
     <div class="hero-sub">${phase} · ${fmtDate(t.startDate, { day: "numeric", month: "short" })} – ${fmtDate(t.endDate, { day: "numeric", month: "short" })}</div>
   </div>
+  <h2>Reisplanner</h2>
+  ${renderHeenPlanner()}
   <h2>Waar zijn we</h2>
   ${renderJourney(today)}
   <h2>Deze dag</h2>
@@ -154,24 +271,37 @@ function renderDashboard() {
   </div>`;
 }
 
-// Reis-tijdlijn: per locatie een blok met een bolletje per dag (klikbaar), en de km tussen locaties.
+// Reis-tijdlijn: per locatie een inklapbaar blok met een bolletje per dag (klikbaar).
+// Bolletje toont de weekdag (ma/di/wo…) + de datum; de subtitel toont reisafstand + -tijd.
 function renderJourney(today) {
-  return `<div class="journey">${dayGroups().map((g, gi) => {
+  const groups = dayGroups();
+  const remembered = [...openCards].some((id) => id.startsWith("leg-"));
+  // Standaard open: het blok met vandaag; anders (reis nog niet begonnen) het eerste.
+  const defIdx = groups.findIndex((g) => g.days.some((d) => d.date === today));
+  const openIdx = defIdx >= 0 ? defIdx : (today < STATE.trip.startDate ? 0 : groups.length - 1);
+  return `<div class="journey">${groups.map((g, gi) => {
     const stay = stayById(g.stayId), c = stayColor(g.stayId);
     const first = g.days[0].date, last = g.days[g.days.length - 1].date;
-    const km = travelKm(first);
-    const gap = gi === 0 ? "" :
-      `<div class="leg-gap"><span class="km">${km != null ? `≈ ${km} km rijden` : "reisdag"}</span></div>`;
+    const info = travelInfo(first);
+    const arr = info ? `≈ ${info.km} km · ${fmtDur(info.min)}` : (gi === 0 ? "vertrek" : "");
+    const id = "leg-" + g.stayId;
+    const open = remembered ? openCards.has(id) : gi === openIdx;
     const dots = g.days.map((d) => {
-      const num = new Date(d.date + "T12:00:00").getDate();
+      const dt = new Date(d.date + "T12:00:00");
+      const wd = dt.toLocaleDateString("nl-NL", { weekday: "short" }).replace(".", "");
       const cls = "jd" + (d.date === today ? " is-today" : "") + (d.date === SELDAY ? " is-sel" : "");
-      return `<button class="${cls}" data-day="${d.date}" title="${esc(d.title)}">${num}</button>`;
+      return `<button class="${cls}" data-day="${d.date}" title="${esc(d.title)}"><i>${wd}</i><b>${dt.getDate()}</b></button>`;
     }).join("");
-    return `${gap}<div class="leg" style="--c:${c}">
-      <div class="leg-head"><span class="leg-name">${esc(stay?.name || "—")}</span>
-        <span class="leg-sub">${fmtDate(first, { day: "numeric", month: "short" })} – ${fmtDate(last, { day: "numeric", month: "short" })} · ${g.days.length} ${g.days.length === 1 ? "dag" : "dagen"}</span></div>
-      <div class="leg-days">${dots}</div>
-    </div>`;
+    return `<details class="card-d leg-d" id="${id}" ${open ? "open" : ""} style="--c:${c}">
+      <summary>
+        <span class="sum-dot"></span>
+        <span class="sum-main">
+          <span class="sum-name">${esc(stay?.name || "—")}</span>
+          <span class="sum-sub">${fmtDate(first, { day: "numeric", month: "short" })} – ${fmtDate(last, { day: "numeric", month: "short" })} · ${g.days.length} ${g.days.length === 1 ? "dag" : "dagen"}${arr ? ` · ${arr}` : ""}</span>
+        </span>
+      </summary>
+      <div class="card-body"><div class="leg-days">${dots}</div></div>
+    </details>`;
   }).join("")}</div>`;
 }
 
@@ -184,7 +314,7 @@ function dayDetailHTML(date) {
   const d = STATE.days.find((x) => x.date === date);
   if (!d) return "";
   const stay = stayById(d.stayId), c = stayColor(d.stayId), st = STATUS[d.status];
-  const km = travelKm(date);
+  const info = travelInfo(date);
   const acts = d.activityIds.map((id) => activityById(id)).filter(Boolean);
   return `<div class="detail" style="--c:${c}">
     <div class="detail-head">
@@ -194,7 +324,8 @@ function dayDetailHTML(date) {
     </div>
     <div class="detail-loc"><span class="loc-dot"></span><span>${esc(stay?.name || "—")}</span></div>
     ${stay?.location ? `<div class="detail-sub muted">${esc(stay.location)}</div>` : ""}
-    ${km != null ? `<div class="detail-km">🚗 Reisdag · ≈ ${km} km rijden</div>` : ""}
+    ${info ? `<div class="detail-km">🚗 Reisdag · ≈ ${info.km} km · ${fmtDur(info.min)} rijden</div>
+      ${info.legs ? `<div class="legs">${info.legs.map((l) => `<div class="leg-row"><span>${esc(l.label)}</span><span class="muted">${l.km} km · ${fmtDur(l.min)}</span></div>`).join("")}</div>` : ""}` : ""}
     ${acts.length ? `<div class="chips" style="margin-top:12px">${acts.map((a) => `<span class="chip">${esc(a.name)}</span>`).join("")}</div>` : ""}
     ${d.notes ? `<div class="detail-notes">${esc(d.notes)}</div>` : ""}
   </div>`;
@@ -248,11 +379,11 @@ function renderPlanning() {
       out += `<div class="stay-head" style="--c:${c}"><span class="sum-dot"></span>${esc(stay?.name || "—")} <span class="muted">· ${esc(stay?.location || "")}</span></div>`;
       lastStay = d.stayId;
     }
-    const km = travelKm(d.date), id = "day-" + d.date;
+    const info = travelInfo(d.date), id = "day-" + d.date;
     out += `<details class="card-d day-d" id="${id}" ${openCards.has(id) ? "open" : ""} style="--c:${c}">
       <summary>
         <span class="sum-main">
-          <span class="sum-name">${fmtDate(d.date)}${km != null ? ` <span class="km-badge">🚗 ≈${km} km</span>` : ""}</span>
+          <span class="sum-name">${fmtDate(d.date)}${info ? ` <span class="km-badge">🚗 ≈${info.km} km · ${fmtDur(info.min)}</span>` : ""}</span>
           <span class="sum-sub">${esc(d.title || "—")}</span>
         </span>
         <span class="pill-static" style="background:${st?.color || "#868e96"}">${st?.label || esc(d.status)}</span>
@@ -377,7 +508,7 @@ function renderChecklist() {
       }).join("")}
       <button class="add sm" data-action="add-todo" data-cat="${cat}">+ toevoegen</button>`;
   };
-  return `<h1>Checklist</h1>${section("actie", "Openstaande acties")}${section("paklijst", "Paklijst")}`;
+  return `<h1>Checklist</h1>${section("actie", "Openstaande acties")}`;
 }
 
 // ---------- Kaart ----------
@@ -414,6 +545,13 @@ function drawMap() {
 // ---------- events (delegated) ----------
 document.addEventListener("input", (e) => {
   const t = e.target;
+  // Reisplanner: lokaal (localStorage), raakt de Supabase-reisdata niet.
+  if (t.id === "depart-time") {
+    localStorage.setItem("heenreis-depart", t.value);
+    const out = $("#heen-out");
+    if (out && t.value) out.innerHTML = heenOutHTML(t.value);
+    return;
+  }
   if (t.dataset.bind && t.type !== "checkbox" && t.tagName !== "SELECT") {
     setByPath(STATE, t.dataset.bind, t.value);
     save();

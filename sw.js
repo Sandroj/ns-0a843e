@@ -1,6 +1,6 @@
 // App-shell cachen zodat de app ook zonder internet opent (data heeft wel verbinding nodig).
 // ponytail: network-first, val terug op cache. Geen offline-schrijfwachtrij (zie 'allebei'-optie).
-const CACHE = "ns2026-v1";
+const CACHE = "ns2026-v2";
 const SHELL = ["./", "index.html", "styles.css", "config.js", "data.js", "storage.js", "app.js", "manifest.webmanifest", "icon.svg"];
 
 self.addEventListener("install", (e) => {
