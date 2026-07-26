@@ -114,8 +114,26 @@ const CORRIDOR = [
   { name: "Bilbao", km: 1440 }, { name: "Santander", km: 1540 }, { name: "Camping La Paz", km: 1650 },
 ];
 // Rijmodel met twee jonge kinderen — knoppen om aan te draaien (ponytail: kalibreer op ervaring).
+// speed = puur rijden (snelweg); pauzes en eten komen daar apart bovenop.
 // day1End: eerste dag na het eten nog doorrijden (kinderen slapen in de auto).
-const DRIVE = { speed: 78, meal: 0.75, dayStart: 9, dayEnd: 19, day1End: 22, arriveBy: 15 };
+const DRIVE = { speed: 100, meal: 0.75, breakEvery: 3, breakLen: 0.75, dayStart: 9, dayEnd: 19, day1End: 22, arriveBy: 15 };
+
+// Pauzes: 45 min na elke volle 3 u rijden (aan het eind van de rit geen extra pauze).
+const breaksFor = (t) => Math.max(0, Math.ceil(t / DRIVE.breakEvery) - 1);
+// Warme maaltijd: volledige stop bij een echte rijdag, half bij een korte, niets bij <1,5 u.
+const mealFor = (t) => t > 3 ? DRIVE.meal : t > 1.5 ? DRIVE.meal / 2 : 0;
+// Kloktijd die het rijden zelf kost (rijden + pauzes), zónder de maaltijd.
+const elapsedDrive = (t) => t + breaksFor(t) * DRIVE.breakLen;
+// Totale kloktijd van een rit (rijden + pauzes + eten).
+const clockFor = (t) => elapsedDrive(t) + mealFor(t);
+// Max uur puur rijden dat in 'window' uur klokttijd past, incl. maaltijd + pauzes.
+function drivingHoursIn(window) {
+  const usable = window - DRIVE.meal;
+  if (usable <= 0.25) return Math.max(0, usable);
+  let t = 0;
+  while (elapsedDrive(t + 0.05) <= usable) t += 0.05;
+  return t;
+}
 
 const DEST_KM = CORRIDOR[CORRIDOR.length - 1].km;
 const POINTS = [{ name: HEEN_START, km: 0 }, ...CORRIDOR];
@@ -130,17 +148,18 @@ function planHeenreis(startHour, startPos = 0) {
   const longFirst = startPos === 0;
   while (pos < DEST_KM - 1 && n <= 8) {
     const endH = (n === 1 && longFirst) ? DRIVE.day1End : DRIVE.dayEnd;
-    const avail = Math.max(0.5, endH - start - DRIVE.meal);
-    const reach = pos + avail * DRIVE.speed;
+    const reach = pos + drivingHoursIn(endH - start) * DRIVE.speed;
     if (reach >= DEST_KM) {
       const driveH = (DEST_KM - pos) / DRIVE.speed;
-      const meal = driveH > 3 ? DRIVE.meal : driveH > 1.5 ? 0.5 : 0;
-      days.push({ n, from: pos, to: DEST_KM, city: "Camping La Paz", arrive: start + driveH + meal, driveH, final: true });
+      days.push({ n, from: pos, to: DEST_KM, city: "Camping La Paz", driveH, arrive: start + clockFor(driveH), final: true });
       pos = DEST_KM;
     } else {
-      const city = stops.filter((s) => s.km > pos + 20)
-        .reduce((a, b) => Math.abs(b.km - reach) < Math.abs(a.km - reach) ? b : a);
-      days.push({ n, from: pos, to: city.km, city: city.name, driveH: (city.km - pos) / DRIVE.speed });
+      // verste stad binnen bereik (niet voorbij het tijdbudget); anders de eerstvolgende stad.
+      const near = stops.filter((s) => s.km > pos + 20);
+      const within = near.filter((s) => s.km <= reach);
+      const city = within.length ? within[within.length - 1] : near[0];
+      const driveH = (city.km - pos) / DRIVE.speed;
+      days.push({ n, from: pos, to: city.km, city: city.name, driveH, arrive: start + clockFor(driveH) });
       pos = city.km;
     }
     start = DRIVE.dayStart; n++;
@@ -173,13 +192,20 @@ function renderHeenPlanner() {
       <label class="lbl">Hoever zijn jullie? <span id="pos-label" class="pos-label">${esc(cityNear(pos))} · ${pos} km</span></label>
       <input type="range" id="pos-slider" class="slider" min="0" max="${DEST_KM}" step="10" value="${pos}">
       <div id="heen-out">${heenOutHTML(depart, pos)}</div>
-      <div class="muted" style="margin-top:12px">Schatting vanaf ${esc(HEEN_START)}, ~${DRIVE.speed} km/u incl. korte pauzes, warme maaltijd ~${Math.round(DRIVE.meal * 60)} min/dag. Eerste dag doorrijden tot ~${DRIVE.day1End}:00 (kinderen slapen in de auto), tussendagen tot ~${DRIVE.dayEnd}:00. Schuif de voortgang mee zodra jullie onderweg zijn. Pas tempo/vertrekpunt naar wens aan.</div>
+      <div class="muted" style="margin-top:12px">Model: ~${DRIVE.speed} km/u puur rijden, elke ~${DRIVE.breakEvery} u een pauze van ~${Math.round(DRIVE.breakLen * 60)} min, plus ~${Math.round(DRIVE.meal * 60)} min eten per rijdag. De rijtijd hieronder is <b>alleen rijden</b> — pauzes en eten komen daar bovenop (staat erbij). Eerste dag doorrijden tot ~${DRIVE.day1End}:00 (kinderen slapen in de auto), tussendagen ${DRIVE.dayStart}:00–${DRIVE.dayEnd}:00. Schuif de voortgang mee zodra jullie onderweg zijn. Pas tempo/vertrekpunt naar wens aan.</div>
     </div>
   </details>`;
 }
 function heenOutHTML(departStr, pos = 0) {
   pos = Math.max(0, Math.min(DEST_KM, Math.round(pos)));
   const hm = (f) => { const H = Math.floor(f), M = Math.round((f - H) * 60); return `${H}:${String(M).padStart(2, "0")}`; };
+  // "+ 2× pauze + eten" — pauzes en eten die bovenop de rijtijd komen.
+  const extras = (t) => {
+    const b = breaksFor(t), p = [];
+    if (b) p.push(`${b}× pauze`);
+    if (mealFor(t)) p.push("eten");
+    return p.length ? " + " + p.join(" + ") : "";
+  };
   if (pos >= DEST_KM - 1) return `<div class="hp-note">Aangekomen op Camping La Paz. Fijne vakantie.</div>`;
 
   const [h, m] = departStr.split(":").map(Number);
@@ -199,25 +225,24 @@ function heenOutHTML(departStr, pos = 0) {
   const rows = days.map((d) => {
     if (d.final) {
       const late = d.arrive > DRIVE.arriveBy;
-      const meal = d.driveH > 3 ? DRIVE.meal : d.driveH > 1.5 ? 0.5 : 0;
-      const latestDep = DRIVE.arriveBy - meal - d.driveH; // uiterste vertrektijd om 15:00 te halen
+      const latestDep = DRIVE.arriveBy - clockFor(d.driveH); // uiterste vertrektijd om 15:00 te halen
       const depNote = late
         ? `zelfs om ${DRIVE.dayStart}:00 weg kom je pas rond ${hm(d.arrive)} aan`
         : `vertrek uiterlijk <b>${hm(latestDep)}</b> om 15:00 te halen · om ${DRIVE.dayStart}:00 weg = rond ${hm(d.arrive)} aan`;
       return `<div class="hp-day${late ? " hp-late" : ""}">
         <div class="hp-date">${label(d.n)}</div>
         <div class="hp-body"><b>Aankomst Camping La Paz</b> ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ vóór 15:00 haalbaar"}<br>
-        <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden · ${depNote}</span></div></div>`;
+        <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · ${depNote}</span></div></div>`;
     }
     const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}` : `vanaf ${DRIVE.dayStart}:00`;
     return `<div class="hp-day">
       <div class="hp-date">${label(d.n)}</div>
       <div class="hp-body">Overnachten rond <b>${esc(d.city)}</b><br>
-      <span class="muted">${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden · ${when}</span></div></div>`;
+      <span class="muted">${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · aankomst ~${hm(d.arrive)} · ${when}</span></div></div>`;
   }).join("");
 
   // Punt 4 — terugrekenen: waar moet je de avond vóór aankomst zitten om vóór 15:00 aan te komen?
-  const lastLegMax = Math.round((DRIVE.arriveBy - DRIVE.dayStart - 0.5) * DRIVE.speed);
+  const lastLegMax = Math.round(drivingHoursIn(DRIVE.arriveBy - DRIVE.dayStart) * DRIVE.speed);
   const nightBefore = DEST_KM - lastLegMax;
   let target = "";
   if (pos < nightBefore) {

@@ -41,8 +41,17 @@ tabel `trip_state` (rij-id `noord-spanje-2026`, nu 6 verblijven + 24 dagen).
 - **Paklijst weg onder "Lijst"** (alleen nog "Openstaande acties"). De paklijst-todos
   staan nog wél in de Supabase-blob (bewust niet verwijderd), maar worden niet getoond.
 - **Nieuw app-icoon**: zonsverduistering (corona-ring + donkere maan), `icon.svg`;
-  manifest-kleuren naar donker (`#0b1020`). SW-cache naar `ns2026-v2` (forceert
-  verse assets bij deploy).
+  manifest-kleuren naar donker (`#0b1020`). **iOS PWA toont geen SVG-icoon** →
+  daarom PNG's toegevoegd (`apple-touch-icon.png` 180, `icon-192.png`,
+  `icon-512.png`), gerasterd via canvas uit dezelfde eclips-tekening. index.html +
+  manifest wijzen nu naar de PNG's. SW-cache `ns2026-v3`.
+- **Rijmodel reisplanner herzien** (`DRIVE` in `app.js`): `speed` is nu **puur
+  rijden** (100 km/u), met **expliciete pauzes** (`breakEvery`/`breakLen` = 45 min
+  per 3 u) en **eten** apart (`meal`, `mealFor`). Helpers: `breaksFor`,
+  `elapsedDrive`, `clockFor`, `drivingHoursIn`. De getoonde rijtijd is alleen
+  rijden; pauzes + eten staan er los bij, met aankomst-kloktijd per dag. Snap naar
+  de **verste stad binnen het tijdbudget** (niet meer overshooten). Uitleg: eerder
+  vertrekken op dag 1 = verder komen, want dag 1 rijdt door tot 22:00.
 - **Getest** in de browser (mobiel 375px, live Supabase, read-only): geen
   console-fouten; planner om 12:00 → Parijs/Bayonne/aankomst vr 14:30, om 17:00 →
   Antwerpen/Poitiers/Santander/aankomst za 10:25.
