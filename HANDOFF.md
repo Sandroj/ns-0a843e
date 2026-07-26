@@ -4,11 +4,15 @@
 > Projectkennis (stack, verifiëren, valkuilen) staat in `AGENTS.md` — niet hier herhaald.
 
 ## Waar staan we
-Werkende v1, **live gekoppeld aan Supabase** (EU/Frankfurt). Sync is getest en
-werkt: de app leest/schrijft de hele reis naar tabel `trip_state` (rij-id
-`noord-spanje-2026`, nu 6 verblijven + 24 dagen). Draait nog alleen lokaal op
-`localhost:8777`; nog **niet online gedeployed**, dus nog niet op Max' telefoon.
-Repo is schoon (laatste commit: Supabase-koppeling).
+Werkende v1, **live gekoppeld aan Supabase** (EU/Frankfurt) én **online gedeployed**
+op GitHub Pages. Sync is getest en werkt: de app leest/schrijft de hele reis naar
+tabel `trip_state` (rij-id `noord-spanje-2026`, nu 6 verblijven + 24 dagen).
+
+- **Live-URL:** https://sandroj.github.io/ns-0a843e/ (getest: HTTP 200, Supabase
+  verbindt, geen console-fouten). Onraadbare repo-naam gekozen i.v.m. open RLS.
+- **GitHub-repo:** `Sandroj/ns-0a843e` (publiek), remote `origin`, branch `main`.
+  Pages serveert `main` / root. **Redeploy = gewoon `git push`** (Pages bouwt auto).
+- Max moet de link op zijn telefoon nog "op beginscherm zetten" (PWA-install).
 
 ## Laatst gedaan (2026-07-26) — UI-herontwerp
 - Volledige restyling (`styles.css`): gradient-hero, zachte schaduwen, glasachtige
@@ -32,12 +36,9 @@ Repo is schoon (laatste commit: Supabase-koppeling).
   Klikken op bolletjes en in-/uitklappen schrijft niets weg — dat is veilig.
 
 ## Volgende stap
-0. Nog niet gedaan sinds herontwerp: **opnieuw deployen** zodat de nieuwe UI op
-   Max' telefoon komt (zie stap 1).
-1. **Online zetten** zodat de app op de telefoon werkt: map naar
-   https://app.netlify.com/drop slepen → link → op telefoon "Zet op beginscherm".
-   (Max wilde hier doorheen geloodst worden; hij koos nog geen host definitief —
-   Netlify Drop is het voorstel, Cloudflare Pages/Vercel is alternatief.)
+1. Max opent https://sandroj.github.io/ns-0a843e/ op zijn telefoon → deel-knop →
+   "Zet op beginscherm" (PWA). Toekomstige wijzigingen: `git push` → Pages
+   redeployt automatisch.
 2. Openstaande reisinhoud (staat ook als todo's ín de app): tussenovernachting
    16 aug boeken, dagindeling Camping La Viorna, route terug naar Frankrijk.
 3. Optioneel op verzoek: foto's per dag/activiteit (Supabase Storage-bucket),
