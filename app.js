@@ -114,7 +114,8 @@ const CORRIDOR = [
   { name: "Bilbao", km: 1440 }, { name: "Santander", km: 1540 }, { name: "Camping La Paz", km: 1650 },
 ];
 // Rijmodel met twee jonge kinderen — knoppen om aan te draaien (ponytail: kalibreer op ervaring).
-const DRIVE = { speed: 78, meal: 0.75, dayStart: 9, dayEnd: 19, arriveBy: 15 };
+// day1End: eerste dag na het eten nog doorrijden (kinderen slapen in de auto).
+const DRIVE = { speed: 78, meal: 0.75, dayStart: 9, dayEnd: 19, day1End: 22, arriveBy: 15 };
 
 // Geef per dag terug hoe ver je komt bij een gegeven vertrektijd (uur, bv 12.5 = 12:30).
 function planHeenreis(departHour) {
@@ -123,7 +124,8 @@ function planHeenreis(departHour) {
   const days = [];
   let pos = 0, start = departHour, n = 1;
   while (pos < dest - 1 && n <= 8) {
-    const avail = Math.max(0.5, DRIVE.dayEnd - start - DRIVE.meal);
+    const endH = n === 1 ? DRIVE.day1End : DRIVE.dayEnd;
+    const avail = Math.max(0.5, endH - start - DRIVE.meal);
     const reach = pos + avail * DRIVE.speed;
     if (reach >= dest) {
       const driveH = (dest - pos) / DRIVE.speed;
@@ -153,7 +155,7 @@ function renderHeenPlanner() {
       <label class="lbl">Vertrek woensdag 5 aug uit ${esc(HEEN_START)}</label>
       <input class="field" type="time" id="depart-time" value="${depart}">
       <div id="heen-out">${heenOutHTML(depart)}</div>
-      <div class="muted" style="margin-top:12px">Schatting vanaf ${esc(HEEN_START)}, ~${DRIVE.speed} km/u incl. korte pauzes, warme maaltijd ~${Math.round(DRIVE.meal * 60)} min/dag, rijden tot ~${DRIVE.dayEnd}:00. Pas vertrekpunt of tempo naar wens aan.</div>
+      <div class="muted" style="margin-top:12px">Schatting vanaf ${esc(HEEN_START)}, ~${DRIVE.speed} km/u incl. korte pauzes, warme maaltijd ~${Math.round(DRIVE.meal * 60)} min/dag. Eerste dag doorrijden tot ~${DRIVE.day1End}:00 (kinderen slapen in de auto), tussendagen tot ~${DRIVE.dayEnd}:00. Pas vertrekpunt of tempo naar wens aan.</div>
     </div>
   </details>`;
 }
