@@ -199,10 +199,15 @@ function heenOutHTML(departStr, pos = 0) {
   const rows = days.map((d) => {
     if (d.final) {
       const late = d.arrive > DRIVE.arriveBy;
+      const meal = d.driveH > 3 ? DRIVE.meal : d.driveH > 1.5 ? 0.5 : 0;
+      const latestDep = DRIVE.arriveBy - meal - d.driveH; // uiterste vertrektijd om 15:00 te halen
+      const depNote = late
+        ? `zelfs om ${DRIVE.dayStart}:00 weg kom je pas rond ${hm(d.arrive)} aan`
+        : `vertrek uiterlijk <b>${hm(latestDep)}</b> om 15:00 te halen · om ${DRIVE.dayStart}:00 weg = rond ${hm(d.arrive)} aan`;
       return `<div class="hp-day${late ? " hp-late" : ""}">
         <div class="hp-date">${label(d.n)}</div>
-        <div class="hp-body"><b>Aankomst Camping La Paz</b> rond ${hm(d.arrive)} ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ ruim op tijd"}<br>
-        <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)}</span></div></div>`;
+        <div class="hp-body"><b>Aankomst Camping La Paz</b> ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ vóór 15:00 haalbaar"}<br>
+        <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden · ${depNote}</span></div></div>`;
     }
     const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}` : `vanaf ${DRIVE.dayStart}:00`;
     return `<div class="hp-day">
