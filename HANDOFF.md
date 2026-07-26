@@ -16,13 +16,18 @@ tabel `trip_state` (rij-id `noord-spanje-2026`, nu 6 verblijven + 24 dagen).
 
 ## Laatst gedaan (2026-07-26) — reisplanner + preciezere ritten
 - **Dag-bolletjes tonen nu weekdag + datum** (WO 5, DO 6…) i.p.v. alleen het getal.
-- **Reisplanner heenreis** (nieuw, dashboard, inklapbaar): vul de vertrektijd op wo
-  5 aug in → schatting per dag hoe ver je komt (overnachtstad) tot Camping La Paz,
-  met aankomsttijd op de laatste dag (doel ≤ 15:00). Rijmodel in `DRIVE`-const
-  (snelheid, maaltijdstop, dag-venster) en corridor NL→Asturië in `CORRIDOR`
-  (cumulatieve km vanaf **Utrecht** — aanname, makkelijk aan te passen). Logica:
-  `planHeenreis()` / `heenOutHTML()`. Vertrektijd staat in **localStorage**
-  (`heenreis-depart`), raakt de Supabase-reisdata dus niet.
+- **Reisplanner heenreis** (nieuw, dashboard, inklapbaar): twee invoeren —
+  **vertrektijd** (wo 5 aug) en een **voortgang-slider** ("hoever zijn jullie?",
+  0–1650 km, met stad-label). Output: schatting per dag tot Camping La Paz met
+  aankomsttijd (doel ≤ 15:00). Eerste dag rijdt door tot `day1End` (22:00, kinderen
+  slapen in de auto); tussendagen 9:00–19:00. Onderweg (slider > 0) plant hij vanaf
+  die positie met relatieve labels ("Komende rijdag / De dag erna"). **Terugreken-tip
+  (punt 4):** toont tot welke stad je door moet rijden (≈ km 1221 / Bayonne) om de
+  dag erna vóór 15:00 aan te komen. Rijmodel in `DRIVE`, corridor NL→Asturië in
+  `CORRIDOR` (cumulatieve km vanaf **Utrecht** — aanname, makkelijk aanpasbaar).
+  Logica: `planHeenreis(startHour, startPos)` / `heenOutHTML(depart, pos)` /
+  `refreshHeen()`. Beide invoeren in **localStorage** (`heenreis-depart`,
+  `heenreis-pos`), raken de Supabase-reisdata dus niet.
 - **Locatieblokken bij Start zijn inklapbaar** (native `<details>`, `leg-<stayId>`);
   standaard open = blok met vandaag, anders het eerste. Onthouden via `openCards`.
 - **Preciezere afstanden + reistijd overal** (punt 6/7/8/9). Nieuwe helper
