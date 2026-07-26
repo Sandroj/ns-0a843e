@@ -3,8 +3,15 @@
 
 let STATE = null;
 let VIEW = "dashboard";
+let SELDAY = null;              // geselecteerde dag in de dashboard-tijdlijn
 let map = null, mapLayer = null;
 const weatherCache = {};
+const openCards = new Set();    // welke inklapkaarten open staan (bewaard over re-renders)
+
+// Kleur per locatie/verblijf — op index, zodat nieuwe verblijven ook een kleur krijgen.
+const PALETTE = ["#0ea5a4", "#6366f1", "#f59e0b", "#ec4899", "#10b981", "#3b82f6", "#ef4444", "#8b5cf6"];
+const stayIndex = (id) => STATE.stays.findIndex((s) => s.id === id);
+const stayColor = (id) => { const i = stayIndex(id); return i < 0 ? "#868e96" : PALETTE[i % PALETTE.length]; };
 
 const STATUS = {
   vast:          { label: "Vast",          color: "#2f9e44" },
@@ -45,6 +52,35 @@ function verhuisdagen() {
   return out;
 }
 
+// Reisafstand op een verhuisdag: hemelsbreed × 1.3 wegfactor, afgerond op 10 km.
+// ponytail: grove schatting uit coördinaten; null als een van beide plekken geen coords heeft.
+function haversine([la1, lo1], [la2, lo2]) {
+  const R = 6371, r = Math.PI / 180;
+  const dLa = (la2 - la1) * r, dLo = (lo2 - lo1) * r;
+  const a = Math.sin(dLa / 2) ** 2 + Math.cos(la1 * r) * Math.cos(la2 * r) * Math.sin(dLo / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+function travelKm(dateISO) {
+  const days = [...STATE.days].sort((a, b) => a.date.localeCompare(b.date));
+  const idx = days.findIndex((d) => d.date === dateISO);
+  if (idx <= 0 || days[idx].stayId === days[idx - 1].stayId) return null;
+  const a = stayById(days[idx - 1].stayId)?.coords, b = stayById(days[idx].stayId)?.coords;
+  if (!a || !b) return null;
+  return Math.round(haversine(a, b) * 1.3 / 10) * 10;
+}
+
+// Groepeer opeenvolgende dagen per verblijf (voor de reis-tijdlijn).
+function dayGroups() {
+  const days = [...STATE.days].sort((a, b) => a.date.localeCompare(b.date));
+  const groups = [];
+  let cur = null;
+  for (const d of days) {
+    if (!cur || cur.stayId !== d.stayId) { cur = { stayId: d.stayId, days: [] }; groups.push(cur); }
+    cur.days.push(d);
+  }
+  return groups;
+}
+
 // ---------- persistence glue ----------
 function save() {
   Store.save(STATE, {
@@ -65,7 +101,7 @@ function render() {
   $("#app").innerHTML = views[VIEW]();
   $$nav();
   if (VIEW === "kaart") setTimeout(drawMap, 0);
-  if (VIEW === "dashboard") loadDashboardWeather();
+  if (VIEW === "dashboard") { loadDashboardWeather(); fillDayDetail(); }
 }
 function $$nav() {
   document.querySelectorAll(".nav-btn").forEach((b) =>
@@ -91,30 +127,25 @@ function statusSelect(path, value) {
 function renderDashboard() {
   const t = STATE.trip, today = todayISO();
   const started = today >= t.startDate, ended = today > t.endDate;
-  let countdown, phase;
-  if (!started) { countdown = daysBetween(today, t.startDate); phase = `nog ${countdown} ${countdown === 1 ? "dag" : "dagen"} tot vertrek`; }
-  else if (!ended) { countdown = daysBetween(t.startDate, today) + 1; phase = `dag ${countdown} van de reis`; }
-  else phase = "reis afgerond";
+  let big, phase;
+  if (!started) { const c = daysBetween(today, t.startDate); big = `T-${c}`; phase = `nog ${c} ${c === 1 ? "dag" : "dagen"} tot vertrek`; }
+  else if (!ended) { const c = daysBetween(t.startDate, today) + 1; big = `Dag ${c}`; phase = `dag ${c} van de reis`; }
+  else { big = "Klaar"; phase = "reis afgerond"; }
 
-  const curDay = STATE.days.find((d) => d.date === today);
-  const curStay = curDay ? stayById(curDay.stayId) : null;
-  const future = STATE.days.filter((d) => d.date > today).sort((a, b) => a.date.localeCompare(b.date));
-  const nextDay = future[0];
-  const vh = verhuisdagen().filter((d) => d > today);
-  const nextVh = vh[0];
+  // Standaard geselecteerde dag: vandaag als die in de reis valt, anders de eerste dag.
+  if (!SELDAY || !STATE.days.some((d) => d.date === SELDAY))
+    SELDAY = STATE.days.some((d) => d.date === today) ? today : STATE.days[0]?.date;
 
   return `
-  <h1>${esc(t.notes ? "Noord-Spanje 2026" : "")}</h1>
   <div class="hero">
-    <div class="hero-big">${started && !ended ? `Dag ${countdown}` : (!started ? `T-${countdown}` : "Klaar")}</div>
+    <div class="hero-eyebrow">Noord-Spanje 2026</div>
+    <div class="hero-big">${big}</div>
     <div class="hero-sub">${phase} · ${fmtDate(t.startDate, { day: "numeric", month: "short" })} – ${fmtDate(t.endDate, { day: "numeric", month: "short" })}</div>
   </div>
-  <div class="cards">
-    ${card("Nu", curStay ? `${esc(curStay.name)}<div class="muted">${esc(curStay.location)}</div>` : "Nog niet vertrokken")}
-    ${card("Volgende bestemming", nextDay ? `${esc(stayById(nextDay.stayId)?.name || "—")}<div class="muted">vanaf ${fmtDate(nextDay.date)}</div>` : "—")}
-    ${card("Volgende verhuisdag", nextVh ? `${fmtDate(nextVh)}<div class="muted">over ${daysBetween(today, nextVh)} dagen</div>` : "Geen meer")}
-    ${card("Open acties", `${STATE.todos.filter((x) => x.category === "actie" && !x.done).length} te doen`)}
-  </div>
+  <h2>Waar zijn we</h2>
+  ${renderJourney(today)}
+  <h2>Deze dag</h2>
+  <div id="day-detail"></div>
   <h2>Weer op de bestemming</h2>
   <div id="weather" class="weather">Weer laden…</div>
   <h2>Hoogtepunten</h2>
@@ -122,8 +153,51 @@ function renderDashboard() {
     ${STATE.activities.filter((a) => a.priority === "must").map((a) => `<span class="chip">${esc(a.name)}</span>`).join("")}
   </div>`;
 }
-function card(title, body) {
-  return `<div class="card"><div class="card-t">${title}</div><div class="card-b">${body}</div></div>`;
+
+// Reis-tijdlijn: per locatie een blok met een bolletje per dag (klikbaar), en de km tussen locaties.
+function renderJourney(today) {
+  return `<div class="journey">${dayGroups().map((g, gi) => {
+    const stay = stayById(g.stayId), c = stayColor(g.stayId);
+    const first = g.days[0].date, last = g.days[g.days.length - 1].date;
+    const km = travelKm(first);
+    const gap = gi === 0 ? "" :
+      `<div class="leg-gap"><span class="km">${km != null ? `≈ ${km} km rijden` : "reisdag"}</span></div>`;
+    const dots = g.days.map((d) => {
+      const num = new Date(d.date + "T12:00:00").getDate();
+      const cls = "jd" + (d.date === today ? " is-today" : "") + (d.date === SELDAY ? " is-sel" : "");
+      return `<button class="${cls}" data-day="${d.date}" title="${esc(d.title)}">${num}</button>`;
+    }).join("");
+    return `${gap}<div class="leg" style="--c:${c}">
+      <div class="leg-head"><span class="leg-name">${esc(stay?.name || "—")}</span>
+        <span class="leg-sub">${fmtDate(first, { day: "numeric", month: "short" })} – ${fmtDate(last, { day: "numeric", month: "short" })} · ${g.days.length} ${g.days.length === 1 ? "dag" : "dagen"}</span></div>
+      <div class="leg-days">${dots}</div>
+    </div>`;
+  }).join("")}</div>`;
+}
+
+// Detailkaart voor de geselecteerde dag (klik op een bolletje).
+function fillDayDetail() {
+  const el = $("#day-detail");
+  if (el) el.innerHTML = dayDetailHTML(SELDAY);
+}
+function dayDetailHTML(date) {
+  const d = STATE.days.find((x) => x.date === date);
+  if (!d) return "";
+  const stay = stayById(d.stayId), c = stayColor(d.stayId), st = STATUS[d.status];
+  const km = travelKm(date);
+  const acts = d.activityIds.map((id) => activityById(id)).filter(Boolean);
+  return `<div class="detail" style="--c:${c}">
+    <div class="detail-head">
+      <div><div class="detail-date">${fmtDate(date, { weekday: "long", day: "numeric", month: "long" })}</div>
+        <div class="detail-title">${esc(d.title || "—")}</div></div>
+      <span class="pill-static" style="background:${st?.color || "#868e96"}">${st?.label || esc(d.status)}</span>
+    </div>
+    <div class="detail-loc"><span class="loc-dot"></span><span>${esc(stay?.name || "—")}</span></div>
+    ${stay?.location ? `<div class="detail-sub muted">${esc(stay.location)}</div>` : ""}
+    ${km != null ? `<div class="detail-km">🚗 Reisdag · ≈ ${km} km rijden</div>` : ""}
+    ${acts.length ? `<div class="chips" style="margin-top:12px">${acts.map((a) => `<span class="chip">${esc(a.name)}</span>`).join("")}</div>` : ""}
+    ${d.notes ? `<div class="detail-notes">${esc(d.notes)}</div>` : ""}
+  </div>`;
 }
 
 async function loadDashboardWeather() {
@@ -169,33 +243,43 @@ function renderPlanning() {
   let lastStay = null;
   for (const d of days) {
     const i = STATE.days.indexOf(d);
-    const stay = stayById(d.stayId);
+    const stay = stayById(d.stayId), c = stayColor(d.stayId), st = STATUS[d.status];
     if (d.stayId !== lastStay) {
-      out += `<div class="stay-head">${esc(stay?.name || "—")} <span class="muted">· ${esc(stay?.location || "")}</span></div>`;
+      out += `<div class="stay-head" style="--c:${c}"><span class="sum-dot"></span>${esc(stay?.name || "—")} <span class="muted">· ${esc(stay?.location || "")}</span></div>`;
       lastStay = d.stayId;
     }
-    out += `<div class="day">
-      <div class="day-top">
-        <div class="day-date">${fmtDate(d.date)}</div>
-        ${statusSelect(`days.${i}.status`, d.status)}
+    const km = travelKm(d.date), id = "day-" + d.date;
+    out += `<details class="card-d day-d" id="${id}" ${openCards.has(id) ? "open" : ""} style="--c:${c}">
+      <summary>
+        <span class="sum-main">
+          <span class="sum-name">${fmtDate(d.date)}${km != null ? ` <span class="km-badge">🚗 ≈${km} km</span>` : ""}</span>
+          <span class="sum-sub">${esc(d.title || "—")}</span>
+        </span>
+        <span class="pill-static" style="background:${st?.color || "#868e96"}">${st?.label || esc(d.status)}</span>
+      </summary>
+      <div class="card-body">
+        <label class="lbl">Titel van de dag</label>
+        <input class="field" data-bind="days.${i}.title" value="${esc(d.title)}">
+        <div class="row2">
+          <div><label class="lbl">Status</label>${statusSelect(`days.${i}.status`, d.status)}</div>
+          <div><label class="lbl">Verblijf</label>
+            <select class="field" data-bind="days.${i}.stayId">
+              ${STATE.stays.map((s) => `<option value="${s.id}" ${s.id === d.stayId ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
+            </select></div>
+        </div>
+        <label class="lbl">Activiteiten</label>
+        <div class="chips">
+          ${d.activityIds.map((aid) => `<span class="chip">${esc(activityById(aid)?.name || "?")}
+             <button class="x" data-action="day-rm-act" data-day="${i}" data-act="${aid}">×</button></span>`).join("")}
+          <select class="chip-add" data-action="day-add-act" data-day="${i}">
+            <option value="">+ activiteit</option>
+            ${STATE.activities.filter((a) => !d.activityIds.includes(a.id)).map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}
+          </select>
+        </div>
+        <label class="lbl">Notities</label>
+        <textarea class="field" data-bind="days.${i}.notes" rows="2" placeholder="Notitie">${esc(d.notes)}</textarea>
       </div>
-      <input class="field title" data-bind="days.${i}.title" value="${esc(d.title)}" placeholder="Titel van de dag">
-      <label class="lbl">Verblijf</label>
-      <select class="field" data-bind="days.${i}.stayId">
-        ${STATE.stays.map((s) => `<option value="${s.id}" ${s.id === d.stayId ? "selected" : ""}>${esc(s.name)}</option>`).join("")}
-      </select>
-      <label class="lbl">Activiteiten</label>
-      <div class="chips">
-        ${d.activityIds.map((aid) => `<span class="chip">${esc(activityById(aid)?.name || "?")}
-           <button class="x" data-action="day-rm-act" data-day="${i}" data-act="${aid}">×</button></span>`).join("")}
-        <select class="chip-add" data-action="day-add-act" data-day="${i}">
-          <option value="">+ activiteit</option>
-          ${STATE.activities.filter((a) => !d.activityIds.includes(a.id)).map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}
-        </select>
-      </div>
-      <label class="lbl">Notities</label>
-      <textarea class="field" data-bind="days.${i}.notes" rows="2" placeholder="Notitie">${esc(d.notes)}</textarea>
-    </div>`;
+    </details>`;
   }
   return out;
 }
@@ -204,33 +288,41 @@ function renderPlanning() {
 function renderStays() {
   let out = `<h1>Verblijven</h1><button class="add" data-action="add-stay">+ Verblijf toevoegen</button>`;
   STATE.stays.forEach((s, i) => {
-    out += `<div class="day">
-      <div class="day-top">
-        <input class="field title" data-bind="stays.${i}.name" value="${esc(s.name)}">
-        ${statusSelect(`stays.${i}.status`, s.status)}
+    const c = stayColor(s.id), st = STATUS[s.status], id = "stay-" + s.id;
+    out += `<details class="card-d" id="${id}" ${openCards.has(id) ? "open" : ""} style="--c:${c}">
+      <summary>
+        <span class="sum-dot"></span>
+        <span class="sum-main">
+          <span class="sum-name">${esc(s.name)}</span>
+          <span class="sum-sub">${fmtDate(s.startDate, { day: "numeric", month: "short" })}–${fmtDate(s.endDate, { day: "numeric", month: "short" })} · ${esc(s.location || s.type)}</span>
+        </span>
+        <span class="pill-static" style="background:${st?.color || "#868e96"}">${st?.label || esc(s.status)}</span>
+      </summary>
+      <div class="card-body">
+        <label class="lbl">Naam</label>
+        <input class="field" data-bind="stays.${i}.name" value="${esc(s.name)}">
+        <div class="row2">
+          <div><label class="lbl">Status</label>${statusSelect(`stays.${i}.status`, s.status)}</div>
+          <div><label class="lbl">Type</label>
+            <select class="field" data-bind="stays.${i}.type">
+              ${STAY_TYPES.map((t) => `<option ${t === s.type ? "selected" : ""}>${t}</option>`).join("")}
+            </select></div>
+        </div>
+        <div class="row2">
+          <div><label class="lbl">Van</label><input class="field" type="date" data-bind="stays.${i}.startDate" value="${s.startDate}"></div>
+          <div><label class="lbl">Tot</label><input class="field" type="date" data-bind="stays.${i}.endDate" value="${s.endDate}"></div>
+        </div>
+        <div class="row2">
+          <div><label class="lbl">Locatie</label><input class="field" data-bind="stays.${i}.location" value="${esc(s.location)}"></div>
+          <div><label class="lbl">Boeking</label><input class="field" data-bind="stays.${i}.booking" value="${esc(s.booking)}" placeholder="Ref / status"></div>
+        </div>
+        <label class="lbl">Website</label>
+        <input class="field" data-bind="stays.${i}.website" value="${esc(s.website)}" placeholder="https://">
+        <label class="lbl">Notities</label>
+        <textarea class="field" data-bind="stays.${i}.notes" rows="2">${esc(s.notes)}</textarea>
+        <button class="del" data-action="del-stay" data-i="${i}">Verwijderen</button>
       </div>
-      <div class="row2">
-        <div><label class="lbl">Type</label>
-          <select class="field" data-bind="stays.${i}.type">
-            ${STAY_TYPES.map((t) => `<option ${t === s.type ? "selected" : ""}>${t}</option>`).join("")}
-          </select></div>
-        <div><label class="lbl">Boeking</label>
-          <input class="field" data-bind="stays.${i}.booking" value="${esc(s.booking)}" placeholder="Ref / status"></div>
-      </div>
-      <div class="row2">
-        <div><label class="lbl">Van</label><input class="field" type="date" data-bind="stays.${i}.startDate" value="${s.startDate}"></div>
-        <div><label class="lbl">Tot</label><input class="field" type="date" data-bind="stays.${i}.endDate" value="${s.endDate}"></div>
-      </div>
-      <label class="lbl">Locatie</label>
-      <input class="field" data-bind="stays.${i}.location" value="${esc(s.location)}">
-      <label class="lbl">Coördinaten (lat, lon) — voor de kaart</label>
-      <input class="field" data-action="coords" data-kind="stays" data-i="${i}" value="${s.coords ? s.coords.join(", ") : ""}" placeholder="43.15, -4.63">
-      <label class="lbl">Website</label>
-      <input class="field" data-bind="stays.${i}.website" value="${esc(s.website)}" placeholder="https://">
-      <label class="lbl">Notities</label>
-      <textarea class="field" data-bind="stays.${i}.notes" rows="2">${esc(s.notes)}</textarea>
-      <button class="del" data-action="del-stay" data-i="${i}">Verwijderen</button>
-    </div>`;
+    </details>`;
   });
   return out;
 }
@@ -239,27 +331,33 @@ function renderStays() {
 function renderActivities() {
   let out = `<h1>Activiteiten</h1><button class="add" data-action="add-act">+ Activiteit toevoegen</button>`;
   STATE.activities.forEach((a, i) => {
-    out += `<div class="day">
-      <div class="day-top">
-        <input class="field title" data-bind="activities.${i}.name" value="${esc(a.name)}">
+    const id = "act-" + a.id;
+    out += `<details class="card-d" id="${id}" ${openCards.has(id) ? "open" : ""}>
+      <summary>
+        <span class="sum-main">
+          <span class="sum-name">${esc(a.name)}</span>
+          <span class="sum-sub">${esc(a.category)}${a.location ? " · " + esc(a.location) : ""}</span>
+        </span>
+        <span class="pri pri-${a.priority}">${PRIORITY[a.priority] || esc(a.priority)}</span>
+      </summary>
+      <div class="card-body">
+        <label class="lbl">Naam</label>
+        <input class="field" data-bind="activities.${i}.name" value="${esc(a.name)}">
+        <div class="row2">
+          <div><label class="lbl">Prioriteit</label>
+            <select class="field" data-bind="activities.${i}.priority">
+              ${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}" ${k === a.priority ? "selected" : ""}>${v}</option>`).join("")}
+            </select></div>
+          <div><label class="lbl">Categorie</label>
+            <input class="field" data-bind="activities.${i}.category" value="${esc(a.category)}"></div>
+        </div>
+        <label class="lbl">Locatie</label>
+        <input class="field" data-bind="activities.${i}.location" value="${esc(a.location)}">
+        <label class="lbl">Notities</label>
+        <textarea class="field" data-bind="activities.${i}.notes" rows="2">${esc(a.notes)}</textarea>
+        <button class="del" data-action="del-act" data-i="${i}">Verwijderen</button>
       </div>
-      <div class="row2">
-        <div><label class="lbl">Prioriteit</label>
-          <select class="field" data-bind="activities.${i}.priority">
-            ${Object.entries(PRIORITY).map(([k, v]) => `<option value="${k}" ${k === a.priority ? "selected" : ""}>${v}</option>`).join("")}
-          </select></div>
-        <div><label class="lbl">Categorie</label>
-          <input class="field" data-bind="activities.${i}.category" value="${esc(a.category)}"></div>
-      </div>
-      <label class="chk"><input type="checkbox" data-bind="activities.${i}.childFriendly" ${a.childFriendly ? "checked" : ""}> Kindvriendelijk</label>
-      <label class="lbl">Locatie</label>
-      <input class="field" data-bind="activities.${i}.location" value="${esc(a.location)}">
-      <label class="lbl">Coördinaten (lat, lon)</label>
-      <input class="field" data-action="coords" data-kind="activities" data-i="${i}" value="${a.coords ? a.coords.join(", ") : ""}" placeholder="43.15, -4.63">
-      <label class="lbl">Notities</label>
-      <textarea class="field" data-bind="activities.${i}.notes" rows="2">${esc(a.notes)}</textarea>
-      <button class="del" data-action="del-act" data-i="${i}">Verwijderen</button>
-    </div>`;
+    </details>`;
   });
   return out;
 }
@@ -330,14 +428,23 @@ document.addEventListener("change", (e) => {
     if (t.tagName === "SELECT" || t.type === "checkbox") render();
     return;
   }
-  const a = t.dataset.action;
-  if (a === "coords") {
-    const parts = t.value.split(",").map((x) => parseFloat(x.trim()));
-    STATE[t.dataset.kind][+t.dataset.i].coords = (parts.length === 2 && parts.every(Number.isFinite)) ? parts : null;
-    save();
-  } else if (a === "day-add-act" && t.value) {
+  if (t.dataset.action === "day-add-act" && t.value) {
     STATE.days[+t.dataset.day].activityIds.push(t.value); save(); render();
   }
+});
+// Onthoud welke inklapkaarten open staan, zodat ze na een re-render open blijven.
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (d.tagName !== "DETAILS" || !d.id) return;
+  if (d.open) openCards.add(d.id); else openCards.delete(d.id);
+}, true);
+// Klik op een dag-bolletje in de tijdlijn -> dagdetail tonen.
+document.addEventListener("click", (e) => {
+  const dot = e.target.closest(".jd");
+  if (!dot) return;
+  SELDAY = dot.dataset.day;
+  document.querySelectorAll(".jd").forEach((x) => x.classList.toggle("is-sel", x === dot));
+  fillDayDetail();
 });
 document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-action]");
