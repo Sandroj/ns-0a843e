@@ -116,7 +116,7 @@ const CORRIDOR = [
 // Rijmodel met twee jonge kinderen — knoppen om aan te draaien (ponytail: kalibreer op ervaring).
 // speed = puur rijden (snelweg); pauzes en eten komen daar apart bovenop.
 // day1End: eerste dag na het eten nog doorrijden (kinderen slapen in de auto).
-const DRIVE = { speed: 100, meal: 0.75, breakEvery: 3, breakLen: 0.75, dayStart: 9, dayEnd: 19, day1End: 22, arriveBy: 15 };
+const DRIVE = { speed: 100, meal: 1.25, breakEvery: 3, breakLen: 0.75, dayStart: 9, dayEnd: 19, day1End: 22, arriveBy: 15 };
 
 // Pauzes: 45 min na elke volle 3 u rijden (aan het eind van de rit geen extra pauze).
 const breaksFor = (t) => Math.max(0, Math.ceil(t / DRIVE.breakEvery) - 1);
