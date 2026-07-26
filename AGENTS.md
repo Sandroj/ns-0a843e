@@ -59,6 +59,24 @@ Werkende v1. Data + sync via Supabase; te installeren als PWA op de telefoon.
 - **Data:** één tabel `trip_state`, één rij per reis (`TRIP_ID`), hele reis als
   JSONB. Supabase-project staat in **EU/Frankfurt**.
 
+## Reisplanner heenreis (in `app.js`)
+Interactieve schatting op het dashboard hoe ver je per dag komt op de heenreis
+(NL → Camping La Paz). Alles zit in `app.js`, geen data in de reis-blob:
+- **Knoppen** staan in de `DRIVE`-const: `speed` (puur rijden, km/u), `meal`
+  (etensduur in uren), `breakEvery`/`breakLen` (pauze: 45 min per 3 u rijden),
+  `dayStart`/`dayEnd` (rij-venster tussendagen), `day1End` (dag 1 door tot 22:00),
+  `arriveBy` (gewenste max aankomsttijd 15:00). Draai hieraan om te kalibreren.
+- **Corridor** = `CORRIDOR`: overnachtsteden met cumulatieve km vanaf `HEEN_START`
+  (**Utrecht**, aanname). Kernlogica: `planHeenreis(startHour, startPos)` +
+  helpers `breaksFor`/`mealFor`/`elapsedDrive`/`clockFor`/`drivingHoursIn`.
+- **Twee invoeren**, beide in **localStorage** (niet in Supabase): vertrektijd
+  (`heenreis-depart`) en voortgang-slider (`heenreis-pos`, km). `refreshHeen()`
+  herberekent zonder full render.
+- **Specifieke ritten** (echte afstand + rijtijd, incl. gesplitste dagen zoals
+  La Paz→Gijón→Oviedo en Oviedo→Covadonga binnendoor) staan in de map
+  `ROUTE_LEGS` (op datum) — bewust in `app.js`, niet in de blob. `travelInfo(date)`
+  gebruikt die, valt anders terug op hemelsbrede schatting × ~70 km/u.
+
 ## Zo verifieer je een wijziging
 Geen tests/build. Start de server (buiten sandbox) → open localhost:8777 → geen
 console-fouten, en dashboard/planning/kaart laden. Supabase-verbinding checken:
@@ -74,6 +92,18 @@ in de browserconsole `fetch(CONFIG.SUPABASE_URL+'/rest/v1/trip_state?select=id',
   beveiliging is link-gebaseerd (RLS = open access). **Nooit** de `service_role`-
   key of het DB-wachtwoord in de app/repo zetten.
 - Sync = hele blob, last-write-wins (prima voor één gezin; zie README).
+- **De live app leest uit Supabase, niet uit `data.js`.** `data.js` seedt alleen
+  bij de allereerste load. Wijzigingen aan reisinhoud die je in de app wilt zien
+  moeten dus naar Supabase (of, zoals `ROUTE_LEGS`, als code in `app.js`) — een
+  edit in `data.js` verschijnt niet op de live app.
+- **iOS PWA toont geen SVG-icoon** (pakt dan een screenshot). Daarom staan er
+  PNG's: `apple-touch-icon.png` (180), `icon-192.png`, `icon-512.png`, gerasterd
+  uit de eclips. Geen SVG→PNG CLI-tool op deze machine → via een `<canvas>` in de
+  browser gerenderd (`toDataURL` → `base64 -d` naar bestand).
+- **Bump de SW-cachenaam** (`CACHE` in `sw.js`, nu `ns2026-v3`) bij elke
+  asset-wijziging, anders serveert de service worker oude bestanden.
+- **Planner snel testen zonder klikken:** in de console
+  `heenOutHTML("12:00", 0)` (of met een km-positie) geeft de HTML-uitvoer terug.
 
 ## Werkafspraken
 - **Taal:** Nederlands.

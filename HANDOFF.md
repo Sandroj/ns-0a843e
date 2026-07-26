@@ -1,99 +1,63 @@
 # HANDOFF — noord-spanje
 
 > Levend statusbestand + startpunt voor de volgende AI-sessie. Kort en concreet.
-> Projectkennis (stack, verifiëren, valkuilen) staat in `AGENTS.md` — niet hier herhaald.
+> Projectkennis (stack, reisplanner, verifiëren, valkuilen) staat in `AGENTS.md` —
+> niet hier herhaald. Git is de waarheid; dit bestand is het kompas.
 
 ## Waar staan we
-Werkende v1, **live gekoppeld aan Supabase** (EU/Frankfurt) én **online gedeployed**
-op GitHub Pages. Sync is getest en werkt: de app leest/schrijft de hele reis naar
-tabel `trip_state` (rij-id `noord-spanje-2026`, nu 6 verblijven + 24 dagen).
+Werkende PWA, **live gekoppeld aan Supabase** (EU/Frankfurt) én **gedeployed** op
+GitHub Pages. Voor Max' gezinsvakantie Noord-Spanje, 5–28 aug 2026.
 
-- **Live-URL:** https://sandroj.github.io/ns-0a843e/ (getest: HTTP 200, Supabase
-  verbindt, geen console-fouten). Onraadbare repo-naam gekozen i.v.m. open RLS.
-- **GitHub-repo:** `Sandroj/ns-0a843e` (publiek), remote `origin`, branch `main`.
-  Pages serveert `main` / root. **Redeploy = gewoon `git push`** (Pages bouwt auto).
-- Max moet de link op zijn telefoon nog "op beginscherm zetten" (PWA-install).
+- **Live-URL:** https://sandroj.github.io/ns-0a843e/ — **redeploy = `git push`**
+  (Pages bouwt automatisch; ~1 min). Repo: `Sandroj/ns-0a843e`, branch `main`.
+- **Deploy-check:** `gh api repos/Sandroj/ns-0a843e/pages/builds/latest` (buiten
+  sandbox i.v.m. TLS). Cache op de telefoon: zie valkuilen.
+- Repo is **clean**, alles gecommit t/m `4909fb2` (26 jul 2026).
 
-## Laatst gedaan (2026-07-26) — reisplanner + preciezere ritten
-- **Dag-bolletjes tonen nu weekdag + datum** (WO 5, DO 6…) i.p.v. alleen het getal.
-- **Reisplanner heenreis** (nieuw, dashboard, inklapbaar): twee invoeren —
-  **vertrektijd** (wo 5 aug) en een **voortgang-slider** ("hoever zijn jullie?",
-  0–1650 km, met stad-label). Output: schatting per dag tot Camping La Paz met
-  aankomsttijd (doel ≤ 15:00). Eerste dag rijdt door tot `day1End` (22:00, kinderen
-  slapen in de auto); tussendagen 9:00–19:00. Onderweg (slider > 0) plant hij vanaf
-  die positie met relatieve labels ("Komende rijdag / De dag erna"). **Terugreken-tip
-  (punt 4):** toont tot welke stad je door moet rijden (≈ km 1221 / Bayonne) om de
-  dag erna vóór 15:00 aan te komen. Rijmodel in `DRIVE`, corridor NL→Asturië in
-  `CORRIDOR` (cumulatieve km vanaf **Utrecht** — aanname, makkelijk aanpasbaar).
-  Logica: `planHeenreis(startHour, startPos)` / `heenOutHTML(depart, pos)` /
-  `refreshHeen()`. Beide invoeren in **localStorage** (`heenreis-depart`,
-  `heenreis-pos`), raken de Supabase-reisdata dus niet.
-- **Locatieblokken bij Start zijn inklapbaar** (native `<details>`, `leg-<stayId>`);
-  standaard open = blok met vandaag, anders het eerste. Onthouden via `openCards`.
-- **Preciezere afstanden + reistijd overal** (punt 6/7/8/9). Nieuwe helper
-  `travelInfo(date)` → `{km, min, legs}`. Specifieke ritten staan in **`ROUTE_LEGS`**
-  (map op datum, in `app.js` — bewust níét in de Supabase-blob):
-  - 13 aug: La Paz → Gijón (80/1u) + Gijón → Oviedo (30/30min) = ±110 km.
-  - 16 aug: Oviedo → Covadonga binnendoor via Parque de Redes (129/2u36) +
-    Covadonga → overnachting richting Potes/Riaño (70/1u30) = ±199 km.
-  - 17 aug: Riaño → La Viorna via Puerto de San Glorio (55/1u20).
-  Dagen zonder expliciete leg gebruiken de oude hemelsbrede schatting × ~70 km/u.
-- **Paklijst weg onder "Lijst"** (alleen nog "Openstaande acties"). De paklijst-todos
-  staan nog wél in de Supabase-blob (bewust niet verwijderd), maar worden niet getoond.
-- **Nieuw app-icoon**: zonsverduistering (corona-ring + donkere maan), `icon.svg`;
-  manifest-kleuren naar donker (`#0b1020`). **iOS PWA toont geen SVG-icoon** →
-  daarom PNG's toegevoegd (`apple-touch-icon.png` 180, `icon-192.png`,
-  `icon-512.png`), gerasterd via canvas uit dezelfde eclips-tekening. index.html +
-  manifest wijzen nu naar de PNG's. SW-cache `ns2026-v3`.
-- **Rijmodel reisplanner herzien** (`DRIVE` in `app.js`): `speed` is nu **puur
-  rijden** (100 km/u), met **expliciete pauzes** (`breakEvery`/`breakLen` = 45 min
-  per 3 u) en **eten** apart (`meal`, `mealFor`). Helpers: `breaksFor`,
-  `elapsedDrive`, `clockFor`, `drivingHoursIn`. De getoonde rijtijd is alleen
-  rijden; pauzes + eten staan er los bij, met aankomst-kloktijd per dag. Snap naar
-  de **verste stad binnen het tijdbudget** (niet meer overshooten). Uitleg: eerder
-  vertrekken op dag 1 = verder komen, want dag 1 rijdt door tot 22:00.
-- **Getest** in de browser (mobiel 375px, live Supabase, read-only): geen
-  console-fouten; planner om 12:00 → Parijs/Bayonne/aankomst vr 14:30, om 17:00 →
-  Antwerpen/Poitiers/Santander/aankomst za 10:25.
-
-## Vorige sessie (2026-07-26) — UI-herontwerp
-- Volledige restyling (`styles.css`): gradient-hero, zachte schaduwen, glasachtige
-  onderbalk, verfijnde typografie, light/dark. **Getest** in de browser (mobiel
-  375px), geen console-fouten.
-- **Dashboard opent nu met een reis-tijdlijn**: per locatie een blok met een
-  gekleurd bolletje per dag (kleur = verblijf, op index via `PALETTE`/`stayColor`).
-  Bolletjes zijn klikbaar → dagdetail in "Deze dag" (`SELDAY` + `fillDayDetail`).
-- **Reisdagen tonen geschatte km** (`travelKm`: haversine × 1.3, afgerond op 10;
-  null als een verblijf geen coords heeft → toont "reisdag"). Zichtbaar op de
-  tijdlijn, als badge in de planning en in het dagdetail.
-- **Planning/verblijven/activiteiten zijn compacte inklapkaarten** (native
-  `<details>`); open-state blijft behouden over re-renders via `openCards`-Set.
-- **Coördinaten-invoervelden verwijderd** uit de formulieren (kaart + weer draaien
-  nog gewoon op de coords die in de data staan). **Kindvriendelijk-veld weg.**
-- Vorige sessie (25-07): app gebouwd, Supabase gekoppeld (EU/Frankfurt), README.
-
-## Let op bij testen
-- App is **live gekoppeld aan Supabase** (last-write-wins). Bij handmatig testen
-  in de browser: pas geen velden aan, anders overschrijf je Max' echte reisdata.
-  Klikken op bolletjes en in-/uitklappen schrijft niets weg — dat is veilig.
+## Laatst gedaan (2026-07-26)
+Grote sessie rond de **reisplanner heenreis** en detaillering. Alles **getest** in
+de browser (mobiel 375px, live Supabase read-only, geen console-fouten):
+- **Reisplanner heenreis** (nieuw, dashboard, inklapbaar): vertrektijd + voortgang-
+  slider → schatting per dag tot Camping La Paz met aankomsttijd (doel ≤ 15:00),
+  uiterste vertrektijd op de laatste dag, en een terugreken-tip (tot welke stad
+  doorrijden om de dag erna op tijd te zijn). Werkt vanaf elke sliderpositie, dus
+  ook om op dag 2/3 te checken of je op schema ligt. Details: zie `AGENTS.md`.
+- **Rijmodel** (`DRIVE` in `app.js`): `speed` = puur rijden (100 km/u); **pauzes
+  (45 min per 3 u) en eten (nu 75 min = vijf kwartier) staan er apart bij**, met
+  aankomst-kloktijd per dag. Getoonde rijtijd = alleen rijden.
+- **Preciezere ritten + reistijd overal** via `travelInfo`/`ROUTE_LEGS`: La Paz→
+  Gijón→Oviedo (±110 km), Oviedo→Covadonga binnendoor via Parque de Redes
+  (129 km/2u36), Covadonga→Potes met tussenovernachting (±199 km), Riaño→La Viorna
+  (55 km). Zichtbaar op tijdlijn, planning-badges en dagdetail.
+- **Dashboard**: dag-bolletjes tonen weekdag + datum; locatieblokken zijn
+  inklapbaar (native `<details>`, open-state in `openCards`).
+- **Checklist**: paklijst-sectie verwijderd (moet elders/langer; nog te bepalen
+  waar). Paklijst-todo's staan nog wél in de Supabase-blob, alleen niet getoond.
+- **App-icoon**: zonsverduistering. **PNG's** (180/192/512) toegevoegd voor iOS,
+  `icon.svg` blijft voor Android/overig. SW-cache `ns2026-v3`.
 
 ## Volgende stap
-1. **Deployen**: `git push` → GitHub Pages redeployt automatisch. (Deze sessie is
-   lokaal gecommit maar nog niet gepusht — Max besluit wanneer live.)
-2. Reisplanner ijken: `HEEN_START`/`CORRIDOR`/`DRIVE` in `app.js` aanpassen als
-   het vertrekpunt niet Utrecht is of het rijtempo anders voelt. Eventueel een
-   terugreis-planner (22–28 aug) op dezelfde leest.
-3. Openstaande reisinhoud (staat ook als todo's ín de app): tussenovernachting
-   16 aug boeken, dagindeling Camping La Viorna, route terug naar Frankrijk.
-4. Paklijst hoort volgens Max ergens anders (langer) — nog te bepalen waar.
-5. Optioneel op verzoek: foto's per dag/activiteit (Supabase Storage-bucket),
-   restaurants/supermarkten als kaartlaag.
+1. **Op de telefoon verversen** om de nieuwe versie/icoon te zien (PWA cachet):
+   pull-to-refresh, of app afsluiten/heropenen; bij twijfel icoon van beginscherm
+   halen en opnieuw "op beginscherm zetten".
+2. Openstaande reisinhoud (staat ook als todo's ín de app): tussenovernachting
+   16 aug boeken (Riaño e.o.), dagindeling Camping La Viorna, route terug.
+3. Op verzoek besproken maar nog niet gebouwd: **terugreis-planner** (22–28 aug)
+   op dezelfde leest als de heenreis-planner.
+4. Reisplanner kalibreren indien nodig: `DRIVE`/`CORRIDOR`/`HEEN_START` in `app.js`
+   (o.a. vertrekpunt = aanname Utrecht).
 
 ## Valkuilen / let op
-- Zie `AGENTS.md` voor de terugkerende valkuilen (sandbox-server, URL zonder
-  `/rest/v1/`, anon-key is bewust publiek).
-- Sync niet met twéé apparaten tegelijk hetzelfde veld bewerken (last-write-wins).
+- Zie `AGENTS.md` voor de terugkerende valkuilen (sandbox-server, Supabase-URL,
+  anon-key publiek, **live app leest uit Supabase niet data.js**, iOS-PWA wil PNG,
+  SW-cache bumpen, planner testen via `heenOutHTML(...)` in de console).
+- App is **live gekoppeld** (last-write-wins). Bij handmatig testen: pas geen
+  velden aan, anders overschrijf je Max' echte reisdata. Klikken/slider/inklappen
+  schrijft niets weg (reisplanner slaat lokaal op in localStorage) — dat is veilig.
 
 ## Openstaand / ideeën
+- Terugreis-planner (zie boven).
+- Nieuwe plek voor een uitgebreide paklijst.
 - Offline-schrijfwachtrij (nu leest offline, schrijven vereist internet).
-- Meerdere reizen: elk een eigen `TRIP_ID` in `config.js`.
+- Foto's per dag/activiteit (Supabase Storage), restaurants/supermarkten als
+  kaartlaag. Meerdere reizen: elk een eigen `TRIP_ID` in `config.js`.
