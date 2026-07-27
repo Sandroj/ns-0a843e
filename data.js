@@ -79,14 +79,15 @@ window.SEED = {
     { id: "a-alba", name: "Ruta del Alba", category: "idee", priority: "idee",
       childFriendly: false, coords: [43.2100, -5.2600], location: "Asturias",
       notes: "Niet gepland, wel interessant." },
-    // Optionele tussenstops op de heenreis. heenreis:true → wel als marker op de
-    // kaart, maar niet meegewogen in fitBounds (kaart blijft op Asturië gefocust).
-    { id: "a-dunepilat", name: "Dune du Pilat", category: "idee", priority: "idee",
-      childFriendly: true, heenreis: true, coords: [44.5883, -1.2136], location: "Arcachon (heenreis)",
-      notes: "Optionele tussenstop heenreis: hoogste duin van Europa, kinderen rennen/rollen naar beneden. ~1u ten westen van Bordeaux, reken ~1,5–2u. Slim bij overnachting rond Bordeaux." },
+    // Optionele tussenstops op de heenreis (aires pal aan de A10). heenreis:true →
+    // wel als marker op de kaart, maar niet meegewogen in fitBounds (kaart blijft
+    // op Asturië gefocust).
+    { id: "a-aire-tours", name: "Aire de Tours La Longue Vue (A10)", category: "idee", priority: "idee",
+      childFriendly: true, heenreis: true, coords: [47.4760, 0.7790], location: "A10 bij Tours (heenreis)",
+      notes: "Rennen-stop pal aan de A10, ~12 km ten noorden van Tours: grote speeltuin met springkussen en een rijparcours met miniautootjes. Goede lunchstop." },
     { id: "a-aire-poitou", name: "Aire de Poitou-Charentes (A10)", category: "idee", priority: "idee",
-      childFriendly: true, heenreis: true, coords: [46.2560, -0.3520], location: "A10 bij Niort (heenreis)",
-      notes: "Optionele rennen-stop pal aan de A10: grote speeltuin/speeltunnel, picknick, klein landbouwmuseum, 's zomers vaak kinderanimatie." },
+      childFriendly: true, heenreis: true, coords: [46.2974, -0.3760], location: "A10 bij Niort (heenreis)",
+      notes: "Rennen-stop pal aan de A10 (Ruralies, ~8 km van Niort): grote speeltuin/speeltunnel, picknick, klein landbouwmuseum, 's zomers vaak kinderanimatie." },
   ],
 
   // Elke dag verwijst naar een stayId. status: vast | waarschijnlijk | idee | uitzoeken
