@@ -108,10 +108,12 @@ function fmtDur(min) {
 // Corridor NL → Asturië, cumulatieve wegkilometers vanaf het vertrekpunt (bij benadering).
 const HEEN_START = "Utrecht";
 const CORRIDOR = [
-  { name: "Antwerpen", km: 150 }, { name: "Rijsel", km: 300 }, { name: "Parijs", km: 520 },
-  { name: "Orléans", km: 640 }, { name: "Tours", km: 760 }, { name: "Poitiers", km: 870 },
-  { name: "Bordeaux", km: 1090 }, { name: "Bayonne", km: 1280 }, { name: "San Sebastián", km: 1340 },
-  { name: "Bilbao", km: 1440 }, { name: "Santander", km: 1540 }, { name: "Camping La Paz", km: 1650 },
+  { name: "Breda", km: 75 }, { name: "Antwerpen", km: 140 }, { name: "Rijsel", km: 260 },
+  { name: "Parijs", km: 480 }, { name: "Orléans", km: 610 }, { name: "Tours", km: 720 },
+  { name: "Châtellerault", km: 775 }, { name: "Poitiers", km: 825 }, { name: "Angoulême", km: 935 },
+  { name: "Bordeaux", km: 1050 }, { name: "Dax", km: 1145 }, { name: "Bayonne", km: 1235 },
+  { name: "San Sebastián", km: 1290 }, { name: "Bilbao", km: 1390 }, { name: "Santander", km: 1485 },
+  { name: "Camping La Paz", km: 1570 },
 ];
 // Rijmodel met twee jonge kinderen — knoppen om aan te draaien (ponytail: kalibreer op ervaring).
 // speed = puur rijden (snelweg); pauzes en eten komen daar apart bovenop.
