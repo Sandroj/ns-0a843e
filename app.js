@@ -615,7 +615,7 @@ function drawMap() {
   STATE.activities.filter((a) => a.coords).forEach((a) => {
     L.circleMarker(a.coords, { radius: 6, color: "#f08c00", fillColor: "#f08c00", fillOpacity: .9 })
       .addTo(mapLayer).bindPopup(`<b>${esc(a.name)}</b><br>${esc(a.location)}`);
-    pts.push(a.coords);
+    if (!a.heenreis) pts.push(a.coords); // heenreis-stops wel tonen, niet meewegen in bounds
   });
   if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
   else map.setView([43.2, -5.0], 8);
