@@ -105,6 +105,12 @@ h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacin
 .weather { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
 .wx { flex: 0 0 auto; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 11px 13px; text-align: center; font-size: 13px; min-width: 62px; box-shadow: var(--shadow-sm); }
 .wx-e { font-size: 24px; margin: 5px 0; }
+.wx-slider-wrap { width: 100%; }
+.wx-day { text-align: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; box-shadow: var(--shadow-sm); margin-bottom: 8px; }
+.wx-day-date { font-weight: 600; text-transform: capitalize; }
+.wx-day-e { font-size: 44px; margin: 6px 0; }
+.wx-day-t { font-size: 20px; font-weight: 600; }
+.wx-scale { display: flex; justify-content: space-between; font-size: 12px; margin-top: 2px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; box-shadow: var(--shadow-sm); }
