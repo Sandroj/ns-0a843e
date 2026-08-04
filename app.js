@@ -670,7 +670,6 @@ function drawMap() {
     pts.push(s.coords);
     L.marker(s.coords).addTo(mapLayer).bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.location)}`);
   });
-  if (routeStays.length > 1) L.polyline(routeStays.map((s) => s.coords), { color: "#1c7ed6", weight: 3, opacity: .6 }).addTo(mapLayer);
   // Activiteiten als kleine markers.
   STATE.activities.filter((a) => a.coords).forEach((a) => {
     L.circleMarker(a.coords, { radius: 6, color: "#f08c00", fillColor: "#f08c00", fillOpacity: .9 })
