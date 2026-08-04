@@ -213,24 +213,28 @@ function heenOutHTML(departStr, pos = 0) {
   const [h, m] = departStr.split(":").map(Number);
   const now = new Date();
   const nowHour = now.getHours() + now.getMinutes() / 60;
-  // Onderweg rekenen we met de échte kloktijd van nu, zodat "hoeveel nog vandaag" klopt.
-  // Al ná het rijvenster? Dan begint de eerstvolgende rijdag morgen om dayStart.
-  const afterHours = pos > 0 && nowHour >= DRIVE.dayEnd;
+  const TRIP_START = new Date("2026-08-05T12:00:00"); // reis begint 5 aug; nooit eerder rekenen
+  const todayNoon = new Date(now); todayNoon.setHours(12, 0, 0, 0);
+  const preTrip = todayNoon < TRIP_START; // nog vóór 5 aug → simuleer vanaf 5 aug, ochtendstart
+  const live = pos > 0 && !preTrip;       // echt onderweg (≥ 5 aug) → gebruik de klok van nu
+  // Live ná het rijvenster? Dan begint de eerstvolgende rijdag morgen om dayStart.
+  const afterHours = live && nowHour >= DRIVE.dayEnd;
   const startDayOffset = afterHours ? 1 : 0;
   const startHour = pos === 0 ? (h || 0) + (m || 0) / 60
+    : !live ? DRIVE.dayStart
     : (afterHours ? DRIVE.dayStart : Math.max(DRIVE.dayStart, nowHour));
   const days = planHeenreis(startHour, pos);
 
-  // Datumlabels: vóór vertrek vanaf wo 5 aug; onderweg vanaf de echte datum van vandaag.
-  const startDate = pos === 0
-    ? new Date("2026-08-05T12:00:00")
-    : (() => { const d = new Date(now); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + startDayOffset); return d; })();
+  // Datumlabels: vóór/rond de reis vanaf wo 5 aug; alleen echt onderweg vanaf de datum van nu.
+  const startDate = live
+    ? (() => { const d = new Date(now); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + startDayOffset); return d; })()
+    : new Date(TRIP_START);
   const dateFor = (n) => { const d = new Date(startDate); d.setDate(d.getDate() + n - 1); return d; };
   const fmtDate = (d) => { const s = d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "short" }); return s.charAt(0).toUpperCase() + s.slice(1); };
-  const label = (n) => (pos > 0 && !afterHours && n === 1) ? `Vandaag · ${fmtDate(dateFor(n))}` : fmtDate(dateFor(n));
+  const label = (n) => (live && !afterHours && n === 1) ? `Vandaag · ${fmtDate(dateFor(n))}` : fmtDate(dateFor(n));
 
   const header = pos > 0
-    ? `<div class="hp-head">Nu ${fmtDate(now)} · ${hm(nowHour)} · rond <b>${esc(cityNear(pos))}</b> · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz${afterHours ? " · <b>vandaag klaar met rijden</b> — morgen verder" : ""}</div>`
+    ? `<div class="hp-head">${live ? `Nu ${fmtDate(now)} · ${hm(nowHour)}` : `Reis vanaf ${fmtDate(TRIP_START)}, ${DRIVE.dayStart}:00`} · rond <b>${esc(cityNear(pos))}</b> · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz${afterHours ? " · <b>vandaag klaar met rijden</b> — morgen verder" : ""}</div>`
     : "";
 
   const rows = days.map((d) => {
@@ -245,7 +249,7 @@ function heenOutHTML(departStr, pos = 0) {
         <div class="hp-body"><b>Aankomst Camping La Paz</b> ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ vóór 15:00 haalbaar"}<br>
         <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · ${depNote}</span></div></div>`;
     }
-    const isToday = pos > 0 && !afterHours && d.n === 1;
+    const isToday = live && !afterHours && d.n === 1;
     const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}`
       : isToday ? `vanaf nu ${hm(startHour)}`
       : `vanaf ${DRIVE.dayStart}:00`;
