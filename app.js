@@ -6,7 +6,6 @@ let VIEW = "dashboard";
 let SELDAY = null;              // geselecteerde dag in de dashboard-tijdlijn
 let map = null, mapLayer = null;
 const weatherCache = {};
-let wxDash = null;              // 14-daagse weerdata voor de dashboard-slider
 const openCards = new Set();    // welke inklapkaarten open staan (bewaard over re-renders)
 
 // Kleur per locatie/verblijf — op index, zodat nieuwe verblijven ook een kleur krijgen.
@@ -444,27 +443,15 @@ async function loadDashboardWeather() {
   if (!stay?.coords) { el.innerHTML = `<span class="muted">Geen coördinaten voor deze plek.</span>`; return; }
   try {
     const wx = await getWeather(stay.coords[0], stay.coords[1]);
-    wxDash = wx;
-    const last = wx.time.length - 1;
-    el.innerHTML = `<div class="wx-slider-wrap">
-      <div class="muted" style="margin-bottom:6px">${esc(stay.name)}</div>
-      <div id="wx-day" class="wx-day"></div>
-      <input type="range" id="wx-slider" class="slider" min="0" max="${last}" step="1" value="0">
-      <div class="wx-scale muted"><span>${fmtDate(wx.time[0], { day: "numeric", month: "short" })}</span><span>${fmtDate(wx.time[last], { day: "numeric", month: "short" })}</span></div>
-    </div>`;
-    renderWxDay(0);
+    // 14 dagen als tegels; ~5 in beeld, de rest zijwaarts te sliden (overflow-x).
+    el.innerHTML = `<div class="muted" style="width:100%;margin-bottom:6px">${esc(stay.name)}</div>` +
+      wx.time.map((d, i) =>
+      `<div class="wx"><div>${fmtDate(d, { weekday: "short", day: "numeric" })}</div>
+       <div class="wx-e">${wmo(wx.code[i])}</div>
+       <div>${Math.round(wx.tmax[i])}°<span class="muted">/${Math.round(wx.tmin[i])}°</span></div></div>`).join("");
   } catch (e) {
     el.innerHTML = `<span class="muted">Weer niet beschikbaar (geen internet?).</span>`;
   }
-}
-// Toont het geselecteerde dag-weer (index in wxDash) in het slider-kaartje.
-function renderWxDay(i) {
-  if (!wxDash) return;
-  const el = $("#wx-day");
-  if (!el) return;
-  el.innerHTML = `<div class="wx-day-date">${fmtDate(wxDash.time[i], { weekday: "long", day: "numeric", month: "long" })}</div>
-    <div class="wx-day-e">${wmo(wxDash.code[i])}</div>
-    <div class="wx-day-t">${Math.round(wxDash.tmax[i])}°<span class="muted">/${Math.round(wxDash.tmin[i])}°</span></div>`;
 }
 async function getWeather(lat, lon) {
   const key = lat.toFixed(2) + "," + lon.toFixed(2);
@@ -631,26 +618,27 @@ function renderChecklist() {
 // lijst gaf via de API alleen de eerste pagina (20 van 22 punten). Bewust code
 // in app.js, niet in de reis-blob (zoals ROUTE_LEGS).
 const MAP_POINTS = [
-  { name: "Bufones de Pría", coords: [43.4584154, -4.9797614] },
-  { name: "Gaztelugatxeko Doniene", coords: [43.4471185, -2.7853101] },
-  { name: "La Ruta del Cares", coords: [43.2133615, -4.9055643] },
-  { name: "Ermita de San Antonio", coords: [43.4613675, -4.928906] },
-  { name: "Kampaoh La Franca", coords: [43.391639, -4.5755036] },
-  { name: "Camping La Cascada", coords: [43.4814832, -6.7026429] },
-  { name: "Camping Bosque de Gordón S.L.", coords: [42.8516107, -5.6620423] },
-  { name: "Oviedo", coords: [43.3622522, -5.8485461] },
-  { name: "Camping la Isla Picos Europe", coords: [43.1575421, -4.6560982] },
-  { name: "Camping Naranjo de Bulnes", coords: [43.3000365, -4.8030908] },
-  { name: "Camping El Redondo Picos Europa", coords: [43.1422956, -4.8126442] },
-  { name: "Fuente Dé", coords: [43.1442372, -4.8122148] },
-  { name: "Camping La Paz", coords: [43.4007242, -4.6515635] },
-  { name: "Senda del Oso", coords: [43.2135578, -6.03659] },
-  { name: "Gijón", coords: [43.5322493, -5.6609733] },
-  { name: "Meren van Covadonga", coords: [43.2718565, -4.9919907] },
-  { name: "Cudillero", coords: [43.5629162, -6.1452648] },
-  { name: "Ruta Del Alba", coords: [43.2021324, -5.4670685] },
-  { name: "Ribadesella", coords: [43.463111, -5.0566643] },
-  { name: "Playa de Gulpiyuri", coords: [43.4474967, -4.8859819] },
+  { name: "Bufones de Pría", desc: "Natuurlijke blaasgaten in de kliffen; bij ruige zee spuit het water omhoog.", coords: [43.4584154, -4.9797614] },
+  { name: "Gaztelugatxeko Doniene", desc: "Kapel op een rotseiland, via 241 trappen langs de kust — bekend uit Game of Thrones.", coords: [43.4471185, -2.7853101] },
+  { name: "La Ruta del Cares", desc: "Spectaculaire kloofwandeling door de Picos de Europa.", coords: [43.2133615, -4.9055643] },
+  { name: "Ermita de San Antonio", desc: "Kapelletje op een landtong met uitzicht over de kust bij Llanes.", coords: [43.4613675, -4.928906] },
+  { name: "Kampaoh La Franca", desc: "Glamping met safaritenten vlak bij het strand.", coords: [43.391639, -4.5755036] },
+  { name: "Camping La Cascada", desc: "Camping aan de Asturische westkust.", coords: [43.4814832, -6.7026429] },
+  { name: "Camping Bosque de Gordón S.L.", desc: "Boscamping in de bergen (provincie León).", coords: [42.8516107, -5.6620423] },
+  { name: "Oviedo", desc: "Historische hoofdstad van Asturië; oude binnenstad en kathedraal.", coords: [43.3622522, -5.8485461] },
+  { name: "Camping la Isla Picos Europe", desc: "Camping aan de rand van de Picos de Europa.", coords: [43.1575421, -4.6560982] },
+  { name: "Camping Naranjo de Bulnes", desc: "Bergcamping bij de Picos de Europa.", coords: [43.3000365, -4.8030908] },
+  { name: "Camping El Redondo Picos Europa", desc: "Camping bij Fuente Dé, hoog in de Picos de Europa.", coords: [43.1422956, -4.8126442] },
+  { name: "Fuente Dé", desc: "Kabelbaan ~750 m omhoog, panorama over de Picos de Europa.", coords: [43.1442372, -4.8122148] },
+  { name: "Camping La Paz", desc: "Camping aan de kust bij Llanes.", coords: [43.4007242, -4.6515635] },
+  { name: "Senda del Oso", desc: "Vlakke fiets-/wandelroute langs een oude spoorlijn, met berenreservaat.", coords: [43.2135578, -6.03659] },
+  { name: "Gijón", desc: "Grootste kuststad van Asturië; stranden, haven en oude wijk Cimadevilla.", coords: [43.5322493, -5.6609733] },
+  { name: "Meren van Covadonga", desc: "Twee bergmeren (Enol en Ercina) hoog in de Picos de Europa.", coords: [43.2718565, -4.9919907] },
+  { name: "Cudillero", desc: "Pittoresk vissersdorp met gekleurde huizen in een steil amfitheater.", coords: [43.5629162, -6.1452648] },
+  { name: "Ruta Del Alba", desc: "Groene riviervallei-wandeling over een geplaveid pad.", coords: [43.2021324, -5.4670685] },
+  { name: "Ribadesella", desc: "Kustplaats aan een riviermonding, bekend van de grot Tito Bustillo.", coords: [43.463111, -5.0566643] },
+  { name: "Playa de Gulpiyuri", desc: "Piepklein landinwaarts strand — een natuurverschijnsel zonder directe zee.", coords: [43.4474967, -4.8859819] },
+  { name: "Zumaia", desc: "Baskische kustplaats bekend om de flysch-kliffen en het strand van Itzurun.", coords: [43.2988236, -2.256885] },
 ];
 function drawMap() {
   const c = $("#map");
@@ -679,7 +667,7 @@ function drawMap() {
   // Opgeslagen plekken uit de Google Maps-lijst (paars).
   MAP_POINTS.forEach((p) => {
     L.circleMarker(p.coords, { radius: 6, color: "#7048e8", fillColor: "#7048e8", fillOpacity: .9 })
-      .addTo(mapLayer).bindPopup(`<b>${esc(p.name)}</b>`);
+      .addTo(mapLayer).bindPopup(`<b>${esc(p.name)}</b>${p.desc ? `<br>${esc(p.desc)}` : ""}`);
     pts.push(p.coords);
   });
   if (pts.length) map.fitBounds(pts, { padding: [30, 30] });
@@ -693,7 +681,6 @@ document.addEventListener("input", (e) => {
   // Reisplanner: lokaal (localStorage), raakt de Supabase-reisdata niet.
   if (t.id === "depart-time") { localStorage.setItem("heenreis-depart", t.value); refreshHeen(); return; }
   if (t.id === "pos-slider") { localStorage.setItem("heenreis-pos", t.value); refreshHeen(); return; }
-  if (t.id === "wx-slider") { renderWxDay(+t.value); return; }
   if (t.dataset.bind && t.type !== "checkbox" && t.tagName !== "SELECT") {
     setByPath(STATE, t.dataset.bind, t.value);
     save();
