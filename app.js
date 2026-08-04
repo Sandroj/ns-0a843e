@@ -211,17 +211,26 @@ function heenOutHTML(departStr, pos = 0) {
   if (pos >= DEST_KM - 1) return `<div class="hp-note">Aangekomen op Camping La Paz. Fijne vakantie.</div>`;
 
   const [h, m] = departStr.split(":").map(Number);
-  const startHour = pos > 0 ? DRIVE.dayStart : (h || 0) + (m || 0) / 60;
+  const now = new Date();
+  const nowHour = now.getHours() + now.getMinutes() / 60;
+  // Onderweg rekenen we met de échte kloktijd van nu, zodat "hoeveel nog vandaag" klopt.
+  // Al ná het rijvenster? Dan begint de eerstvolgende rijdag morgen om dayStart.
+  const afterHours = pos > 0 && nowHour >= DRIVE.dayEnd;
+  const startDayOffset = afterHours ? 1 : 0;
+  const startHour = pos === 0 ? (h || 0) + (m || 0) / 60
+    : (afterHours ? DRIVE.dayStart : Math.max(DRIVE.dayStart, nowHour));
   const days = planHeenreis(startHour, pos);
 
-  // Labels: vóór vertrek op datum (wo 5, do 6…); onderweg relatief (Komende rijdag…).
-  const dateFor = (n) => { const d = new Date("2026-08-05T12:00:00"); d.setDate(d.getDate() + n - 1); return d; };
-  const rel = ["Komende rijdag", "De dag erna", "Dag 3", "Dag 4", "Dag 5", "Dag 6", "Dag 7"];
-  const label = (n) => pos > 0 ? (rel[n - 1] || `Dag ${n}`)
-    : dateFor(n).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "short" });
+  // Datumlabels: vóór vertrek vanaf wo 5 aug; onderweg vanaf de echte datum van vandaag.
+  const startDate = pos === 0
+    ? new Date("2026-08-05T12:00:00")
+    : (() => { const d = new Date(now); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + startDayOffset); return d; })();
+  const dateFor = (n) => { const d = new Date(startDate); d.setDate(d.getDate() + n - 1); return d; };
+  const fmtDate = (d) => { const s = d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "short" }); return s.charAt(0).toUpperCase() + s.slice(1); };
+  const label = (n) => (pos > 0 && !afterHours && n === 1) ? `Vandaag · ${fmtDate(dateFor(n))}` : fmtDate(dateFor(n));
 
   const header = pos > 0
-    ? `<div class="hp-head">Nu rond <b>${esc(cityNear(pos))}</b> · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz</div>`
+    ? `<div class="hp-head">Nu ${fmtDate(now)} · ${hm(nowHour)} · rond <b>${esc(cityNear(pos))}</b> · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz${afterHours ? " · <b>vandaag klaar met rijden</b> — morgen verder" : ""}</div>`
     : "";
 
   const rows = days.map((d) => {
@@ -236,10 +245,16 @@ function heenOutHTML(departStr, pos = 0) {
         <div class="hp-body"><b>Aankomst Camping La Paz</b> ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ vóór 15:00 haalbaar"}<br>
         <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · ${depNote}</span></div></div>`;
     }
-    const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}` : `vanaf ${DRIVE.dayStart}:00`;
+    const isToday = pos > 0 && !afterHours && d.n === 1;
+    const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}`
+      : isToday ? `vanaf nu ${hm(startHour)}`
+      : `vanaf ${DRIVE.dayStart}:00`;
+    const head = isToday
+      ? `Nog te rijden vandaag tot <b>${esc(d.city)}</b> — daar overnachten`
+      : `Overnachten rond <b>${esc(d.city)}</b>`;
     return `<div class="hp-day">
       <div class="hp-date">${label(d.n)}</div>
-      <div class="hp-body">Overnachten rond <b>${esc(d.city)}</b><br>
+      <div class="hp-body">${head}<br>
       <span class="muted">${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · aankomst ~${hm(d.arrive)} · ${when}</span></div></div>`;
   }).join("");
 
@@ -254,13 +269,12 @@ function heenOutHTML(departStr, pos = 0) {
     target = `<div class="hp-note">Je zit al voorbij ${cityNear(nightBefore)} — de laatste ${DEST_KM - pos} km kun je morgenochtend ruim vóór 15:00 rijden.</div>`;
   }
 
-  // Boekingsnotitie alleen relevant vóór vertrek (met datums).
-  let booking = "";
-  if (pos === 0) {
-    const arriveISO = dateFor(days[days.length - 1].n).toISOString().slice(0, 10);
-    if (arriveISO < "2026-08-08") booking = `<div class="hp-note">Je komt volgens deze schatting vóór 8 aug aan. La Paz is geboekt vanaf za 8 aug — je hebt marge om rustiger te rijden of onderweg een extra nacht te pakken.</div>`;
-    else if (arriveISO > "2026-08-08") booking = `<div class="hp-note hp-note-warn">Let op: je komt ná 8 aug aan, terwijl La Paz vanaf 8 aug geboekt is. Vertrek eerder of rijd de eerste dagen langer door.</div>`;
-  }
+  // Aankomstdatum toetsen aan de boeking (za 8 aug) — vóór vertrek én onderweg.
+  const arriveDate = dateFor(days[days.length - 1].n);
+  const arriveISO = arriveDate.toISOString().slice(0, 10);
+  let booking = `<div class="hp-note">Aankomst La Paz volgens schatting: <b>${fmtDate(arriveDate)}</b>.</div>`;
+  if (arriveISO < "2026-08-08") booking = `<div class="hp-note">Aankomst La Paz: <b>${fmtDate(arriveDate)}</b> — vóór 8 aug. La Paz is geboekt vanaf za 8 aug, dus je hebt marge om rustiger te rijden of onderweg een extra nacht te pakken.</div>`;
+  else if (arriveISO > "2026-08-08") booking = `<div class="hp-note hp-note-warn">Aankomst La Paz: <b>${fmtDate(arriveDate)}</b> — ná 8 aug, terwijl La Paz vanaf 8 aug geboekt is. Vertrek eerder of rijd de komende dagen langer door.</div>`;
   return header + rows + target + booking;
 }
 
