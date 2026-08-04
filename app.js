@@ -143,11 +143,10 @@ const cityNear = (km) => POINTS.reduce((a, b) => Math.abs(b.km - km) < Math.abs(
 
 // Plan de resterende dagen vanaf een startpositie (km) en starttijd (uur, 12.5 = 12:30).
 // startPos 0 = nog thuis: dan mag de eerste avond doorrijden tot day1End.
-function planHeenreis(startHour, startPos = 0) {
+function planHeenreis(startHour, startPos = 0, longFirst = startPos === 0) {
   const stops = CORRIDOR.slice(0, -1); // mogelijke overnachtsteden onderweg
   const days = [];
   let pos = startPos, start = startHour, n = 1;
-  const longFirst = startPos === 0;
   while (pos < DEST_KM - 1 && n <= 8) {
     const endH = (n === 1 && longFirst) ? DRIVE.day1End : DRIVE.dayEnd;
     const reach = pos + drivingHoursIn(endH - start) * DRIVE.speed;
@@ -168,38 +167,50 @@ function planHeenreis(startHour, startPos = 0) {
   }
   return days;
 }
-// Herbereken de planner-uitvoer bij een wijziging van tijd of voortgang (zonder re-render).
+// Trip-dagen: index 1..4 = wo 5 t/m za 8 aug (aankomstdeadline). Datum = 5 aug + (d-1).
+const TRIP_DAYS = [
+  { d: 1, label: "Wo 5 aug" }, { d: 2, label: "Do 6 aug" },
+  { d: 3, label: "Vr 7 aug" }, { d: 4, label: "Za 8 aug" },
+];
+const heenDag = () => Math.min(4, Math.max(1, +(localStorage.getItem("heenreis-dag") || 1)));
+// Herbereken de planner-uitvoer bij een wijziging van dag/tijd/voortgang (zonder re-render).
 function refreshHeen() {
   const out = $("#heen-out");
   if (!out) return;
-  const depart = ($("#depart-time") || {}).value || "12:00";
+  const tijd = ($("#depart-time") || {}).value || "12:00";
   const pos = +(($("#pos-slider") || {}).value || 0);
   const lbl = $("#pos-label");
   if (lbl) lbl.textContent = `${cityNear(pos)} · ${pos} km`;
-  out.innerHTML = heenOutHTML(depart, pos);
+  out.innerHTML = heenOutHTML(heenDag(), tijd, pos);
 }
 function renderHeenPlanner() {
-  const depart = localStorage.getItem("heenreis-depart") || "12:00";
+  const dag = heenDag();
+  const tijd = localStorage.getItem("heenreis-depart") || "12:00";
   const pos = +(localStorage.getItem("heenreis-pos") || 0);
+  const dayBtns = TRIP_DAYS.map((t) =>
+    `<button class="hp-daybtn${t.d === dag ? " is-sel" : ""}" data-action="heen-dag" data-dag="${t.d}">${t.label}</button>`).join("");
   return `<details class="card-d planner" id="heen-planner" ${openCards.has("heen-planner") ? "open" : ""}>
     <summary>
       <span class="sum-main">
         <span class="sum-name">Reisplanner heenreis</span>
-        <span class="sum-sub">Vertrektijd + voortgang → schatting tot La Paz</span>
+        <span class="sum-sub">Welke dag + hoe laat + waar → schatting tot La Paz</span>
       </span>
     </summary>
     <div class="card-body">
-      <label class="lbl">Vertrek woensdag 5 aug uit ${esc(HEEN_START)}</label>
-      <input class="field" type="time" id="depart-time" value="${depart}">
-      <label class="lbl">Hoever zijn jullie? <span id="pos-label" class="pos-label">${esc(cityNear(pos))} · ${pos} km</span></label>
+      <label class="lbl">Welke dag is het?</label>
+      <div class="hp-days">${dayBtns}</div>
+      <label class="lbl">Hoe laat is het? <span class="muted">(op wo = vertrektijd)</span></label>
+      <input class="field" type="time" id="depart-time" value="${tijd}">
+      <label class="lbl">Waar zijn jullie nu? <span id="pos-label" class="pos-label">${esc(cityNear(pos))} · ${pos} km</span></label>
       <input type="range" id="pos-slider" class="slider" min="0" max="${DEST_KM}" step="10" value="${pos}">
-      <div id="heen-out">${heenOutHTML(depart, pos)}</div>
-      <div class="muted" style="margin-top:12px">Model: ~${DRIVE.speed} km/u puur rijden, elke ~${DRIVE.breakEvery} u een pauze van ~${Math.round(DRIVE.breakLen * 60)} min, plus ~${Math.round(DRIVE.meal * 60)} min eten per rijdag. De rijtijd hieronder is <b>alleen rijden</b> — pauzes en eten komen daar bovenop (staat erbij). Eerste dag doorrijden tot ~${DRIVE.day1End}:00 (kinderen slapen in de auto), tussendagen ${DRIVE.dayStart}:00–${DRIVE.dayEnd}:00. Schuif de voortgang mee zodra jullie onderweg zijn. Pas tempo/vertrekpunt naar wens aan.</div>
+      <div id="heen-out">${heenOutHTML(dag, tijd, pos)}</div>
+      <div class="muted" style="margin-top:12px">Model: ~${DRIVE.speed} km/u puur rijden, elke ~${DRIVE.breakEvery} u een pauze van ~${Math.round(DRIVE.breakLen * 60)} min, plus ~${Math.round(DRIVE.meal * 60)} min eten per rijdag. De rijtijd hieronder is <b>alleen rijden</b> — pauzes en eten komen daar bovenop (staat erbij). Woensdag doorrijden tot ~${DRIVE.day1End}:00 (kinderen slapen in de auto), overige dagen ${DRIVE.dayStart}:00–${DRIVE.dayEnd}:00. Kies de dag, zet de tijd op nu en schuif "waar zijn jullie" naar de dichtstbijzijnde stad — dan zie je hoever je die dag en de dagen erna nog moet.</div>
     </div>
   </details>`;
 }
-function heenOutHTML(departStr, pos = 0) {
+function heenOutHTML(dag = 1, timeStr = "12:00", pos = 0) {
   pos = Math.max(0, Math.min(DEST_KM, Math.round(pos)));
+  dag = Math.min(4, Math.max(1, dag));
   const hm = (f) => { const H = Math.floor(f), M = Math.round((f - H) * 60); return `${H}:${String(M).padStart(2, "0")}`; };
   // "+ 2× pauze + eten" — pauzes en eten die bovenop de rijtijd komen.
   const extras = (t) => {
@@ -210,32 +221,28 @@ function heenOutHTML(departStr, pos = 0) {
   };
   if (pos >= DEST_KM - 1) return `<div class="hp-note">Aangekomen op Camping La Paz. Fijne vakantie.</div>`;
 
-  const [h, m] = departStr.split(":").map(Number);
-  const now = new Date();
-  const nowHour = now.getHours() + now.getMinutes() / 60;
-  const TRIP_START = new Date("2026-08-05T12:00:00"); // reis begint 5 aug; nooit eerder rekenen
-  const todayNoon = new Date(now); todayNoon.setHours(12, 0, 0, 0);
-  const preTrip = todayNoon < TRIP_START; // nog vóór 5 aug → simuleer vanaf 5 aug, ochtendstart
-  const live = pos > 0 && !preTrip;       // echt onderweg (≥ 5 aug) → gebruik de klok van nu
-  // Live ná het rijvenster? Dan begint de eerstvolgende rijdag morgen om dayStart.
-  const afterHours = live && nowHour >= DRIVE.dayEnd;
+  const [h, m] = timeStr.split(":").map(Number);
+  const timeH = (h || 0) + (m || 0) / 60;
+  const atHome = dag === 1 && pos === 0;              // wo 5 aug, nog thuis → vertrektijd geldt
+  // Ná het rijvenster (onderweg)? Dan begint de eerstvolgende rijdag morgen om dayStart.
+  const afterHours = !atHome && timeH >= DRIVE.dayEnd;
   const startDayOffset = afterHours ? 1 : 0;
-  const startHour = pos === 0 ? (h || 0) + (m || 0) / 60
-    : !live ? DRIVE.dayStart
-    : (afterHours ? DRIVE.dayStart : Math.max(DRIVE.dayStart, nowHour));
-  const days = planHeenreis(startHour, pos);
+  const startHour = atHome ? timeH
+    : (afterHours ? DRIVE.dayStart : Math.max(DRIVE.dayStart, timeH));
+  const longFirst = dag === 1 && !afterHours;         // woensdag mag doorrijden tot day1End
+  const days = planHeenreis(startHour, pos, longFirst);
 
-  // Datumlabels: vóór/rond de reis vanaf wo 5 aug; alleen echt onderweg vanaf de datum van nu.
-  const startDate = live
-    ? (() => { const d = new Date(now); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() + startDayOffset); return d; })()
-    : new Date(TRIP_START);
-  const dateFor = (n) => { const d = new Date(startDate); d.setDate(d.getDate() + n - 1); return d; };
+  // Datum van trip-dag d = 5 aug + (d-1). Eerste rijdag in 'days' = gekozen dag (+1 als vandaag klaar).
+  const tripDate = (d) => { const x = new Date("2026-08-05T12:00:00"); x.setDate(x.getDate() + d - 1); return x; };
+  const baseDay = dag + startDayOffset;
+  const dateFor = (n) => tripDate(baseDay + n - 1);
   const fmtDate = (d) => { const s = d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "short" }); return s.charAt(0).toUpperCase() + s.slice(1); };
-  const label = (n) => (live && !afterHours && n === 1) ? `Vandaag · ${fmtDate(dateFor(n))}` : fmtDate(dateFor(n));
+  const label = (n) => (!atHome && !afterHours && n === 1) ? `Vandaag · ${fmtDate(dateFor(n))}` : fmtDate(dateFor(n));
 
-  const header = pos > 0
-    ? `<div class="hp-head">${live ? `Nu ${fmtDate(now)} · ${hm(nowHour)}` : `Reis vanaf ${fmtDate(TRIP_START)}, ${DRIVE.dayStart}:00`} · rond <b>${esc(cityNear(pos))}</b> · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz${afterHours ? " · <b>vandaag klaar met rijden</b> — morgen verder" : ""}</div>`
-    : "";
+  const header = `<div class="hp-head">${afterHours
+    ? `${fmtDate(tripDate(dag))} ${timeStr} · <b>vandaag klaar met rijden</b> — morgen verder`
+    : atHome ? `Vertrek ${fmtDate(tripDate(1))} om ${timeStr} uit ${esc(HEEN_START)}`
+    : `Nu ${fmtDate(tripDate(dag))} · ${timeStr} · rond <b>${esc(cityNear(pos))}</b>`}${atHome ? "" : ` · ≈ ${pos} km · nog ${DEST_KM - pos} km tot La Paz`}</div>`;
 
   const rows = days.map((d) => {
     if (d.final) {
@@ -249,8 +256,8 @@ function heenOutHTML(departStr, pos = 0) {
         <div class="hp-body"><b>Aankomst Camping La Paz</b> ${late ? "⚠︎ na 15:00 — eerder weg of extra tussenstop" : "✓ vóór 15:00 haalbaar"}<br>
         <span class="muted">laatste ${Math.round(d.to - d.from)} km · ${fmtDur(d.driveH * 60)} rijden${extras(d.driveH)} · ${depNote}</span></div></div>`;
     }
-    const isToday = live && !afterHours && d.n === 1;
-    const when = (d.n === 1 && pos === 0) ? `vertrek ${departStr}`
+    const isToday = !atHome && !afterHours && d.n === 1;
+    const when = (d.n === 1 && atHome) ? `vertrek ${timeStr}`
       : isToday ? `vanaf nu ${hm(startHour)}`
       : `vanaf ${DRIVE.dayStart}:00`;
     const head = isToday
@@ -682,6 +689,12 @@ document.addEventListener("click", (e) => {
   const b = e.target.closest("[data-action]");
   if (!b) return;
   const a = b.dataset.action;
+  if (a === "heen-dag") {
+    localStorage.setItem("heenreis-dag", b.dataset.dag);
+    document.querySelectorAll("[data-action='heen-dag']").forEach((x) => x.classList.toggle("is-sel", x === b));
+    refreshHeen();
+    return;
+  }
   if (a === "day-rm-act") {
     const d = STATE.days[+b.dataset.day];
     d.activityIds = d.activityIds.filter((x) => x !== b.dataset.act); save(); render();

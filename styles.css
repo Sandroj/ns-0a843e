@@ -65,6 +65,9 @@ h2 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacin
 /* ---------- Reisplanner heenreis ---------- */
 .planner #depart-time { width: auto; min-width: 140px; }
 .pos-label { color: var(--accent); font-weight: 700; text-transform: none; letter-spacing: 0; }
+.hp-days { display: flex; gap: 8px; margin-bottom: 6px; }
+.hp-daybtn { flex: 1; padding: 9px 4px; font-size: 13px; font-weight: 600; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); border-radius: 10px; cursor: pointer; }
+.hp-daybtn.is-sel { background: var(--accent); border-color: var(--accent); color: #fff; }
 .slider { width: 100%; accent-color: var(--accent); height: 28px; }
 .hp-head { font-size: 14px; font-weight: 500; margin-bottom: 6px; padding: 10px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; }
 .hp-day { display: flex; gap: 12px; padding: 11px 0; border-top: 1px solid var(--border); }
