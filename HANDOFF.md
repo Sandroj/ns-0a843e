@@ -4,6 +4,21 @@
 > Projectkennis (stack, reisplanner, verifiëren, valkuilen) staat in `AGENTS.md` —
 > niet hier herhaald. Git is de waarheid; dit bestand is het kompas.
 
+## Gearchiveerd (11 sep 2026)
+De vakantie (5–28 aug 2026) is voorbij; dit project wordt **niet meer
+doorontwikkeld**. Besluiten bij het archiveren:
+- Map blijft staan in `projects/`, GitHub-repo blijft gewoon actief (niet
+  gearchiveerd), Pages-site blijft online.
+- **Supabase-project (`ljqpjnznyncvaerifgvz`) staat gepauzeerd** — het was op
+  11 sep al automatisch gepauzeerd (gratis tier, geen verkeer; host geeft
+  NXDOMAIN). De live app laadt dus geen data meer totdat het project in het
+  Supabase-dashboard hervat wordt. Er is **geen export** van de `trip_state`-rij
+  in de repo; de startdata staat wel in `data.js`.
+- Wil je iets hergebruiken (bijv. voor een volgende reis): hervat Supabase of
+  seed een nieuw project via `schema.sql` + `data.js`.
+
+Alles hieronder is de stand van vóór het archiveren.
+
 ## Waar staan we
 Werkende PWA, **live gekoppeld aan Supabase** (EU/Frankfurt) én **gedeployed** op
 GitHub Pages. Voor Max' gezinsvakantie Noord-Spanje, 5–28 aug 2026.
