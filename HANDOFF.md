@@ -12,7 +12,29 @@ GitHub Pages. Voor Max' gezinsvakantie Noord-Spanje, 5–28 aug 2026.
   (Pages bouwt automatisch; ~1 min). Repo: `Sandroj/ns-0a843e`, branch `main`.
 - **Deploy-check:** `gh api repos/Sandroj/ns-0a843e/pages/builds/latest` (buiten
   sandbox i.v.m. TLS). Cache op de telefoon: zie valkuilen.
-- Repo is **clean**, alles gecommit t/m `4909fb2` (26 jul 2026).
+- Repo is **clean**, alles gecommit t/m `0baeaf3` (4 aug 2026).
+
+## Laatst gedaan (2026-08-04)
+Twee sessies, kleinere iteraties op heenreisplanner en kaart/weer, alle gepusht
+en live:
+- **Heenreisplanner**: klok-detectie vervangen door **dagknoppen (wo–za)** om
+  handmatig de reisdag te kiezen i.p.v. automatisch op systeemtijd te gokken;
+  schatting geklemd op 5 aug zodat testen vóór de reisdatum geen onzin toont.
+- **Weer**: eerst omgezet naar een dag-slider, daarna weer **teruggedraaid naar
+  de 14-daagse tegelstrip** (~5 tegels in zicht, horizontaal sleep/veeg) — de
+  slider-variant beviel niet. Ongebruikte slider-restanten (`wxDash`,
+  event-handler, CSS) opgeruimd. "Hoogtepunten" verwijderd, een Maps-lijst
+  toegevoegd.
+- **Kaart**: route-lijn tussen verblijf-markers verwijderd. **Zumaia**
+  toegevoegd als 21e punt (`43,2988, -2,2569`). Alle 21 kaartpunten hebben nu
+  een korte beschrijving in de popup (verblijf-/activiteiten-markers hadden dat
+  al via plaats/naam).
+- Getest: geen console-fouten, live gecontroleerd op sandroj.github.io/ns-0a843e/.
+- SW-cache staat op `ns2026-v12`; gebruiker moet zoals gebruikelijk éénmaal
+  verversen/PWA herstarten voor de nieuwe versie.
+- Losstaand: vraag beantwoord over volledig vanaf mobiel werken onderweg (cloud
+  Claude + GitHub-koppeling, geen laptop nodig) — geen code-wijziging, alleen
+  advies.
 
 ## Laatst gedaan (2026-07-26)
 Grote sessie rond de **reisplanner heenreis** en detaillering. Alles **getest** in
